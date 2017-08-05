@@ -48,6 +48,7 @@
     "load-json-file": "^2.0.0",
     "load-yaml-file": "^0.1.0",
     "mkdirp-promise": "^5.0.1",
+    "most": "^1.5.1",
     "mz": "^2.6.0",
     "ncp": "^2.0.0",
     "node-gyp": "^3.6.0",

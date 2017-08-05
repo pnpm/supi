@@ -41,7 +41,7 @@ export type DependencyTreeNodeMap = {
   [nodeId: string]: DependencyTreeNode
 }
 
-export default function (
+export default async function (
   tree: TreeNodeMap,
   rootNodeIds: string[],
   topPkgIds: string[],
@@ -50,7 +50,7 @@ export default function (
   topParents: {name: string, version: string}[],
   independentLeaves: boolean,
   nodeModules: string
-): DependencyTreeNodeMap {
+): Promise<DependencyTreeNodeMap> {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
       parent.name,
@@ -63,7 +63,7 @@ export default function (
 
   const nodeIdToResolvedId = {}
   const resolvedTree: DependencyTreeNodeMap = {}
-  resolvePeersOfChildren(new Set(rootNodeIds), pkgsByName, {
+  await resolvePeersOfChildren(new Set(rootNodeIds), pkgsByName, {
     tree,
     nodeIdToResolvedId,
     resolvedTree,
@@ -77,7 +77,7 @@ export default function (
   return resolvedTree
 }
 
-function resolvePeersOfNode (
+async function resolvePeersOfNode (
   nodeId: string,
   parentPkgs: ParentRefs,
   ctx: {
@@ -87,16 +87,21 @@ function resolvePeersOfNode (
     independentLeaves: boolean,
     nodeModules: string,
   }
-): Set<string> {
+): Promise<Set<string>> {
   const node = ctx.tree[nodeId]
 
-  const childrenSet = new Set(node.children)
-  const unknownResolvedPeersOfChildren = resolvePeersOfChildren(childrenSet, parentPkgs, ctx)
+  const children = await node.children
+    .reduce((acc: string[], child: string) => {
+      acc.push(child)
+      return acc
+    }, [])
+  const childrenSet = new Set(children)
+  const unknownResolvedPeersOfChildren = await resolvePeersOfChildren(childrenSet, parentPkgs, ctx)
 
   const resolvedPeers = R.isEmpty(node.pkg.peerDependencies)
     ? new Set<string>()
     : resolvePeers(node, Object.assign({}, parentPkgs,
-      toPkgByName(R.props<TreeNode>(node.children, ctx.tree))
+      toPkgByName(R.props<TreeNode>(children, ctx.tree))
     ), ctx.tree)
 
   unknownResolvedPeersOfChildren.delete(nodeId)
@@ -119,7 +124,7 @@ function resolvePeersOfNode (
 
   ctx.nodeIdToResolvedId[nodeId] = absolutePath
   if (!ctx.resolvedTree[absolutePath] || ctx.resolvedTree[absolutePath].depth > node.depth) {
-    const independent = ctx.independentLeaves && !node.children.length && R.isEmpty(node.pkg.peerDependencies)
+    const independent = ctx.independentLeaves && !children.length && R.isEmpty(node.pkg.peerDependencies)
     const pathToUnpacked = path.join(node.pkg.path, 'node_modules', node.pkg.name)
     const hardlinkedLocation = !independent
       ? path.join(modules, node.pkg.name)
@@ -162,7 +167,7 @@ function difference<T>(a: Set<T>, b: Set<T>) {
   return new Set(Array.from(a).filter(el => !b.has(el)))
 }
 
-function resolvePeersOfChildren (
+async function resolvePeersOfChildren (
   children: Set<string>,
   parentParentPkgs: ParentRefs,
   ctx: {
@@ -172,7 +177,7 @@ function resolvePeersOfChildren (
     independentLeaves: boolean,
     nodeModules: string,
   }
-): Set<string> {
+): Promise<Set<string>> {
   const childrenArray = Array.from(children)
   let allResolvedPeers = new Set()
   const parentPkgs = Object.assign({}, parentParentPkgs,
@@ -180,7 +185,7 @@ function resolvePeersOfChildren (
   )
 
   for (const child of childrenArray) {
-    addMany(allResolvedPeers, resolvePeersOfNode(child, parentPkgs, ctx))
+    addMany(allResolvedPeers, await resolvePeersOfNode(child, parentPkgs, ctx))
   }
 
   const unknownResolvedPeersOfChildren = difference(allResolvedPeers, children)
