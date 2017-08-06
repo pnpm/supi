@@ -49,7 +49,11 @@ export default async function (
   // to avoid warnings about unresolved peer dependencies
   topParents: {name: string, version: string}[],
   independentLeaves: boolean,
-  nodeModules: string
+  nodeModules: string,
+  opts: {
+    nonDevPackageIds: Set<string>,
+    nonOptionalPackageIds: Set<string>,
+  }
 ): Promise<DependencyTreeNodeMap> {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
@@ -69,6 +73,8 @@ export default async function (
     resolvedTree,
     independentLeaves,
     nodeModules,
+    nonDevPackageIds: opts.nonDevPackageIds,
+    nonOptionalPackageIds: opts.nonOptionalPackageIds,
   })
 
   R.values(resolvedTree).forEach(node => {
@@ -86,6 +92,8 @@ async function resolvePeersOfNode (
     resolvedTree: DependencyTreeNodeMap,
     independentLeaves: boolean,
     nodeModules: string,
+    nonDevPackageIds: Set<string>,
+    nonOptionalPackageIds: Set<string>,
   }
 ): Promise<Set<string>> {
   const node = ctx.tree[nodeId]
@@ -143,8 +151,8 @@ async function resolvePeersOfNode (
       children: Array.from(union(childrenSet, resolvedPeers)),
       depth: node.depth,
       absolutePath,
-      dev: node.pkg.dev,
-      optional: node.pkg.optional,
+      dev: !ctx.nonDevPackageIds.has(node.pkg.id),
+      optional: !ctx.nonOptionalPackageIds.has(node.pkg.id),
       id: node.pkg.id,
       installable: node.installable,
     }
@@ -176,6 +184,8 @@ async function resolvePeersOfChildren (
     resolvedTree: DependencyTreeNodeMap,
     independentLeaves: boolean,
     nodeModules: string,
+    nonDevPackageIds: Set<string>,
+    nonOptionalPackageIds: Set<string>,
   }
 ): Promise<Set<string>> {
   const childrenArray = Array.from(children)

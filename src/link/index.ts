@@ -43,6 +43,8 @@ export default async function (
     skipped: Set<string>,
     pkg: Package,
     independentLeaves: boolean,
+    nonDevPackageIds: Set<string>,
+    nonOptionalPackageIds: Set<string>,
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -52,7 +54,16 @@ export default async function (
 }> {
   const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
-  const pkgsToLink = await resolvePeers(tree, rootNodeIds, topPkgIds, opts.topParents, opts.independentLeaves, opts.baseNodeModules)
+  const pkgsToLink = await resolvePeers(
+    tree,
+    rootNodeIds,
+    topPkgIds,
+    opts.topParents,
+    opts.independentLeaves,
+    opts.baseNodeModules, {
+      nonDevPackageIds: opts.nonDevPackageIds,
+      nonOptionalPackageIds: opts.nonOptionalPackageIds,
+    })
   const newShr = updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
 
   await removeOrphanPkgs({

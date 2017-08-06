@@ -108,6 +108,8 @@ export type InstallContext = {
   rawNpmConfig: Object,
   nodeModules: string,
   verifyStoreInegrity: boolean,
+  nonDevPackageIds: Set<string>,
+  nonOptionalPackageIds: Set<string>,
 }
 
 export async function install (maybeOpts?: PnpmOptions) {
@@ -371,6 +373,8 @@ async function installInContext (
       alwaysAuth: opts.alwaysAuth,
       registry: opts.registry,
     }),
+    nonDevPackageIds: new Set(),
+    nonOptionalPackageIds: new Set(),
   }
   const installOpts = {
     root: ctx.root,
@@ -401,8 +405,6 @@ async function installInContext (
     }, {})
   const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
   const pkgsToSave = (pkgs as {
-    optional: boolean,
-    dev: boolean,
     resolution: Resolution,
     id: string,
     version: string,
@@ -431,7 +433,13 @@ async function installInContext (
   }
 
   if (newPkg) {
-    syncShrinkwrapWithPackage(ctx.shrinkwrap, newPkg, pkgsToSave)
+    syncShrinkwrapWithPackage(ctx.shrinkwrap, newPkg, pkgsToSave.map(pkgToSave => {
+      const pti = packagesToInstall.find(pti => pti.name === pkgToSave.name)
+      return Object.assign({}, pkgToSave, {
+        dev: !!(pti && pti.dev),
+        optional: !!(pti && pti.optional),
+      })
+    }))
   }
 
   const result = await linkPackages(pkgs, rootNodeIds, installCtx.tree, {
@@ -454,6 +462,8 @@ async function installInContext (
     independentLeaves: opts.independentLeaves,
     storeIndex: ctx.storeIndex,
     makePartialPrivateShrinkwrap,
+    nonDevPackageIds: installCtx.nonDevPackageIds,
+    nonOptionalPackageIds: installCtx.nonOptionalPackageIds,
   })
 
   await Promise.all([
@@ -481,7 +491,7 @@ async function installInContext (
               userAgent: opts.userAgent
             })
           } catch (err) {
-            if (installCtx.installs[pkg.id].optional) {
+            if (!installCtx.nonOptionalPackageIds.has(pkg.id)) {
               logger.warn({
                 message: `Skipping failed optional dependency ${pkg.id}`,
                 err,

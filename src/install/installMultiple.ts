@@ -40,8 +40,6 @@ export type PkgAddress = {
 export type InstalledPackage = {
   id: string,
   resolution: Resolution,
-  dev: boolean,
-  optional: boolean,
   fetchingFiles: Promise<PackageContentInfo>,
   calculatingIntegrity: Promise<void>,
   path: string,
@@ -309,10 +307,8 @@ async function install (
     ctx.installs[fetchedPkg.id] = {
       id: fetchedPkg.id,
       resolution: fetchedPkg.resolution,
-      optional: spec.optional,
       name: pkg.name,
       version: pkg.version,
-      dev: spec.dev,
       fetchingFiles: fetchedPkg.fetchingFiles,
       calculatingIntegrity: fetchedPkg.calculatingIntegrity,
       path: fetchedPkg.path,
@@ -329,9 +325,6 @@ async function install (
       installable,
     }
   } else {
-    ctx.installs[fetchedPkg.id].dev = ctx.installs[fetchedPkg.id].dev && spec.dev
-    ctx.installs[fetchedPkg.id].optional = ctx.installs[fetchedPkg.id].optional && spec.optional
-
     ctx.tree[nodeId] = {
       nodeId,
       pkg: ctx.installs[fetchedPkg.id],
@@ -340,6 +333,12 @@ async function install (
       depth: options.currentDepth,
       installable,
     }
+  }
+  if (!spec.optional) {
+    ctx.nonOptionalPackageIds.add(fetchedPkg.id)
+  }
+  if (!spec.dev) {
+    ctx.nonDevPackageIds.add(fetchedPkg.id)
   }
 
   return {
