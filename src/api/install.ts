@@ -29,7 +29,7 @@ import {
   Shrinkwrap,
   ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
-import {absolutePathToRef} from '../fs/shrinkwrap'
+import {syncShrinkwrapWithPackage} from '../fs/shrinkwrap'
 import {
   save as saveModules,
   LAYOUT_VERSION,
@@ -431,37 +431,7 @@ async function installInContext (
   }
 
   if (newPkg) {
-    ctx.shrinkwrap.dependencies = ctx.shrinkwrap.dependencies || {}
-    ctx.shrinkwrap.specifiers = ctx.shrinkwrap.specifiers || {}
-    ctx.shrinkwrap.optionalDependencies = ctx.shrinkwrap.optionalDependencies || {}
-    ctx.shrinkwrap.devDependencies = ctx.shrinkwrap.devDependencies || {}
-
-    const deps = newPkg.dependencies || {}
-    const devDeps = newPkg.devDependencies || {}
-    const optionalDeps = newPkg.optionalDependencies || {}
-
-    const getSpecFromPkg = (depName: string) => deps[depName] || devDeps[depName] || optionalDeps[depName]
-
-    for (const dep of pkgsToSave) {
-      const ref = absolutePathToRef(dep.id, dep.name, dep.resolution, ctx.shrinkwrap.registry)
-      if (dep.dev) {
-        ctx.shrinkwrap.devDependencies[dep.name] = ref
-      } else if (dep.optional) {
-        ctx.shrinkwrap.optionalDependencies[dep.name] = ref
-      } else {
-        ctx.shrinkwrap.dependencies[dep.name] = ref
-      }
-      if (!dep.dev) {
-        delete ctx.shrinkwrap.devDependencies[dep.name]
-      }
-      if (!dep.optional) {
-        delete ctx.shrinkwrap.optionalDependencies[dep.name]
-      }
-      if (dep.dev || dep.optional) {
-        delete ctx.shrinkwrap.dependencies[dep.name]
-      }
-      ctx.shrinkwrap.specifiers[dep.name] = getSpecFromPkg(dep.name)
-    }
+    syncShrinkwrapWithPackage(ctx.shrinkwrap, newPkg, pkgsToSave)
   }
 
   const result = await linkPackages(pkgs, rootNodeIds, installCtx.tree, {
