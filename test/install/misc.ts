@@ -47,11 +47,11 @@ test('no dependencies (lodash)', async (t: tape.Test) => {
 
   await installPkgs(['lodash@4.0.0'], testDefaults({reporter}))
 
-  t.ok(reporter.calledWithMatch(<StageLog>{
+  t.equal(reporter.withArgs(sinon.match(<StageLog>{
     name: 'pnpm:stage',
     level: 'debug',
     message: 'resolution_done',
-  }), 'resolution stage done logged')
+  })).callCount, 1, 'resolution stage done logged')
   t.ok(reporter.calledWithMatch({
     level: 'info',
     message: 'Creating dependency tree',
