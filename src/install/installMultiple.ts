@@ -34,6 +34,7 @@ import most = require('most')
 export type PkgAddress = {
   nodeId: string,
   pkgId: string,
+  specRaw: string,
 }
 
 export type InstalledPackage = {
@@ -44,7 +45,6 @@ export type InstalledPackage = {
   fetchingFiles: Promise<PackageContentInfo>,
   calculatingIntegrity: Promise<void>,
   path: string,
-  specRaw: string,
   name: string,
   version: string,
   peerDependencies: Dependencies,
@@ -316,7 +316,6 @@ async function install (
       fetchingFiles: fetchedPkg.fetchingFiles,
       calculatingIntegrity: fetchedPkg.calculatingIntegrity,
       path: fetchedPkg.path,
-      specRaw: spec.raw,
       peerDependencies: pkg.peerDependencies || {},
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
@@ -342,14 +341,11 @@ async function install (
       installable,
     }
   }
-  // we need this for saving to package.json
-  if (options.currentDepth === 0) {
-    ctx.installs[fetchedPkg.id].specRaw = spec.raw
-  }
 
   return {
     nodeId,
     pkgId: fetchedPkg.id,
+    specRaw: spec.raw,
   }
 }
 

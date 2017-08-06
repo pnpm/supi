@@ -15,7 +15,7 @@ import safeIsInnerLink from '../safeIsInnerLink'
 import {fromDir as safeReadPkgFromDir} from '../fs/safeReadPkg'
 import {PnpmOptions, StrictPnpmOptions, Dependencies} from '../types'
 import getContext, {PnpmContext} from './getContext'
-import installMultiple, {InstalledPackage} from '../install/installMultiple'
+import installMultiple, {InstalledPackage, PkgAddress} from '../install/installMultiple'
 import externalLink from './link'
 import linkPackages from '../link'
 import save from '../save'
@@ -394,6 +394,11 @@ async function installInContext (
       acc.push(nodeId)
       return acc
     }, [])
+  const pkgByRawSpec = await rootPkgs
+    .reduce((acc: {}, pkgAddress: PkgAddress) => {
+      acc[pkgAddress.specRaw] = installCtx.tree[pkgAddress.nodeId].pkg
+      return acc
+    }, {})
   const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
   const pkgsToSave = (pkgs as {
     optional: boolean,
@@ -402,7 +407,6 @@ async function installInContext (
     id: string,
     version: string,
     name: string,
-    specRaw: string,
   }[]).concat(installCtx.localPackages)
 
   let newPkg: Package | undefined = ctx.pkg
@@ -414,9 +418,9 @@ async function installInContext (
     const saveType = getSaveType(opts)
     newPkg = await save(
       pkgJsonPath,
-      <any>pkgsToSave.map(dep => { // tslint:disable-line
-        const spec = R.find(spec => spec.raw === dep.specRaw, newSpecs)
-        if (!spec) return null
+      <any>newSpecs.map(spec => { // tslint:disable-line
+        const dep = pkgByRawSpec[spec.raw] || R.find(lp => lp.specRaw === spec.raw, installCtx.localPackages)
+        if (!dep) return null
         return {
           name: dep.name,
           saveSpec: getSaveSpec(spec, dep.version, opts.saveExact)
