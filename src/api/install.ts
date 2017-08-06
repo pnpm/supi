@@ -386,21 +386,44 @@ async function installInContext (
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     (spec: PackageSpec) => !spec.name || safeIsInnerLink(nodeModulesPath, spec.name, {storePath: ctx.storePath}))
-  const rootPkgs = installMultiple(
+  const installedPkgs = installMultiple(
     installCtx,
     nonLinkedPkgs,
     installOpts
   )
-  stageLogger.debug('resolution_done')
-  const rootNodeIds = await rootPkgs
-    .map(pkg => pkg.nodeId)
-    .reduce((acc: string[], nodeId: string) => {
-      acc.push(nodeId)
+
+  const rootPkgs = await installedPkgs
+    .filter(installedPkg => installedPkg.depth === 0)
+    .take(nonLinkedPkgs.length)
+    .reduce((acc: PkgAddress[], pkgAddress: PkgAddress) => {
+      acc.push(pkgAddress)
       return acc
     }, [])
+
+  installCtx.tree = {}
+  const rootNodeIds: string[] = []
+
+  for (const rootPkg of rootPkgs) {
+    const nodeId = `:/:${rootPkg.installedPkg.id}:`
+    rootNodeIds.push(nodeId)
+    installCtx.tree[nodeId] = {
+      nodeId,
+      pkg: rootPkg.installedPkg,
+      children: buildTree(installCtx, nodeId, rootPkg.installedPkg.id, 1, rootPkg.installedPkg.installable),
+      depth: 0,
+      installable: rootPkg.installedPkg.installable,
+    }
+  }
+
+  installedPkgs.subscribe({
+    error: () => {},
+    next: () => {},
+    complete: () => stageLogger.debug('resolution_done'),
+  })
+
   const pkgByRawSpec = await rootPkgs
     .reduce((acc: {}, pkgAddress: PkgAddress) => {
-      acc[pkgAddress.specRaw] = installCtx.tree[pkgAddress.nodeId].pkg
+      acc[pkgAddress.specRaw] = pkgAddress.installedPkg
       return acc
     }, {})
   const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
@@ -529,6 +552,29 @@ async function installInContext (
   await Promise.all(R.values(installCtx.installs).map(installed => installed.calculatingIntegrity))
 
   summaryLogger.info(undefined)
+}
+
+function buildTree (
+  ctx: InstallContext,
+  parentNodeId: string,
+  parentId: string,
+  depth: number,
+  installable: boolean
+) {
+  return ctx.installs[parentId].children
+    .filter(childId => parentNodeId.indexOf(`:${parentId}:${childId}:`) === -1)
+    .map(childId => {
+      const childNodeId = `${parentNodeId}${childId}:`
+      installable = installable && !ctx.skipped.has(childId)
+      ctx.tree[childNodeId] = {
+        nodeId: childNodeId,
+        pkg: ctx.installs[childId],
+        children: buildTree(ctx, childNodeId, childId, depth + 1, installable),
+        depth,
+        installable,
+      }
+      return childNodeId
+    })
 }
 
 async function getTopParents (pkgNames: string[], modules: string) {

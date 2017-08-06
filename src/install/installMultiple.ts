@@ -32,9 +32,9 @@ import semver = require('semver')
 import most = require('most')
 
 export type PkgAddress = {
-  nodeId: string,
-  pkgId: string,
   specRaw: string,
+  installedPkg: InstalledPackage,
+  depth: number,
 }
 
 export type InstalledPackage = {
@@ -48,6 +48,7 @@ export type InstalledPackage = {
   peerDependencies: Dependencies,
   optionalDependencies: Set<string>,
   hasBundledDependencies: boolean,
+  installable: boolean,
   children: most.Stream<string>,
 }
 
@@ -67,31 +68,30 @@ export default function installMultiple (
   const resolvedDependencies = options.resolvedDependencies || {}
   const preferedDependencies = options.preferedDependencies || {}
   const update = options.update && options.currentDepth <= ctx.depth
-  const pkgAddresses = most.from(specs)
-    .chain((spec: PackageSpec) => {
-      let reference = resolvedDependencies[spec.name]
-      let proceed = false
+  return most.mergeArray(
+    specs
+      .map((spec: PackageSpec) => {
+        let reference = resolvedDependencies[spec.name]
+        let proceed = false
 
-      if (!reference && spec.type === 'range' && preferedDependencies[spec.name] &&
-        semver.satisfies(preferedDependencies[spec.name], spec.fetchSpec, true)) {
+        if (!reference && spec.type === 'range' && preferedDependencies[spec.name] &&
+          semver.satisfies(preferedDependencies[spec.name], spec.fetchSpec, true)) {
 
-        proceed = true
-        reference = preferedDependencies[spec.name]
-      }
+          proceed = true
+          reference = preferedDependencies[spec.name]
+        }
 
-      return most.fromPromise(install(spec, ctx, Object.assign({
-          keypath: options.keypath,
-          parentNodeId: options.parentNodeId,
-          currentDepth: options.currentDepth,
-          parentIsInstallable: options.parentIsInstallable,
-          update,
-          proceed,
-        },
-        getInfoFromShrinkwrap(ctx.shrinkwrap, reference, spec.name, ctx.registry))))
-    })
-    .filter(Boolean)
-
-  return pkgAddresses as most.Stream<PkgAddress>
+        return most.join(most.fromPromise(install(spec, ctx, Object.assign({
+            keypath: options.keypath,
+            parentNodeId: options.parentNodeId,
+            currentDepth: options.currentDepth,
+            parentIsInstallable: options.parentIsInstallable,
+            update,
+            proceed,
+          },
+          getInfoFromShrinkwrap(ctx.shrinkwrap, reference, spec.name, ctx.registry)))))
+      })
+    )
 }
 
 function getInfoFromShrinkwrap (
@@ -173,7 +173,7 @@ async function install (
     update: boolean,
     proceed: boolean,
   }
-): Promise<PkgAddress | null> {
+): Promise<most.Stream<PkgAddress>> {
   const keypath = options.keypath || []
   const proceed = options.proceed || !options.shrinkwrapResolution || ctx.force || keypath.length <= ctx.depth
   const parentIsInstallable = options.parentIsInstallable === undefined || options.parentIsInstallable
@@ -186,7 +186,7 @@ async function install (
       options.currentDepth > 0 || await exists(path.join(ctx.nodeModules, spec.name))
     )) {
 
-    return null
+    return most.empty()
   }
 
   const registry = normalizeRegistry(spec.scope && ctx.rawNpmConfig[`${spec.scope}:registry`] || ctx.registry)
@@ -234,11 +234,11 @@ async function install (
       })
     }
     logStatus({status: 'downloaded_manifest', pkgId: fetchedPkg.id, pkgVersion: fetchedPkg.pkg.version})
-    return null
+    return most.empty()
   }
 
   if (options.parentNodeId.indexOf(`:${dependentId}:${fetchedPkg.id}:`) !== -1) {
-    return null
+    return most.empty()
   }
 
   let pkg: Package
@@ -279,6 +279,12 @@ async function install (
   if (installable) {
     ctx.skipped.delete(fetchedPkg.id)
   }
+  if (!spec.optional) {
+    ctx.nonOptionalPackageIds.add(fetchedPkg.id)
+  }
+  if (!spec.dev) {
+    ctx.nonDevPackageIds.add(fetchedPkg.id)
+  }
   if (!ctx.installs[fetchedPkg.id]) {
     if (!installable) {
       // optional dependencies are resolved for consistent shrinkwrap.yaml files
@@ -304,6 +310,7 @@ async function install (
         update: options.update,
       }
     )
+
     ctx.installs[fetchedPkg.id] = {
       id: fetchedPkg.id,
       resolution: fetchedPkg.resolution,
@@ -315,60 +322,24 @@ async function install (
       peerDependencies: pkg.peerDependencies || {},
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
-      children: children.map(child => child.pkgId),
+      children: children
+        .filter(child => child.depth === options.currentDepth + 1)
+        .map(child => child.installedPkg.id),
+      installable: currentIsInstallable,
     }
-    ctx.tree[nodeId] = {
-      nodeId,
-      pkg: ctx.installs[fetchedPkg.id],
-      children: children.map(child => child.nodeId),
+
+    return most.startWith({
+      installedPkg: ctx.installs[fetchedPkg.id],
       depth: options.currentDepth,
-      installable,
-    }
-  } else {
-    ctx.tree[nodeId] = {
-      nodeId,
-      pkg: ctx.installs[fetchedPkg.id],
-      children: buildTree(ctx, nodeId, fetchedPkg.id, options.currentDepth + 1,
-        installable),
-      depth: options.currentDepth,
-      installable,
-    }
-  }
-  if (!spec.optional) {
-    ctx.nonOptionalPackageIds.add(fetchedPkg.id)
-  }
-  if (!spec.dev) {
-    ctx.nonDevPackageIds.add(fetchedPkg.id)
+      specRaw: spec.raw,
+    }, children)
   }
 
-  return {
-    nodeId,
-    pkgId: fetchedPkg.id,
+  return most.just({
+    installedPkg: ctx.installs[fetchedPkg.id],
+    depth: options.currentDepth,
     specRaw: spec.raw,
-  }
-}
-
-function buildTree (
-  ctx: InstallContext,
-  parentNodeId: string,
-  parentId: string,
-  depth: number,
-  installable: boolean
-) {
-  return ctx.installs[parentId].children
-    .filter(childId => parentNodeId.indexOf(`:${parentId}:${childId}:`) === -1)
-    .map(childId => {
-      const childNodeId = `${parentNodeId}${childId}:`
-      installable = installable && !ctx.skipped.has(childId)
-      ctx.tree[childNodeId] = {
-        nodeId: childNodeId,
-        pkg: ctx.installs[childId],
-        children: buildTree(ctx, childNodeId, childId, depth + 1, installable),
-        depth,
-        installable,
-      }
-      return childNodeId
-    })
+  })
 }
 
 function normalizeRegistry (registry: string) {
