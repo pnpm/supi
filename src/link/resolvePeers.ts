@@ -16,6 +16,8 @@ type DependencyTreeNodeContainer = {
   nodeId: string,
   node: _DependencyTreeNode,
   depth: number,
+  isRepeated: boolean,
+  isCircular: boolean,
 }
 
 export type DependencyTreeNode = {
@@ -109,15 +111,33 @@ export default function (
     nonOptionalPackageIds: opts.nonOptionalPackageIds,
   })
 
-  return result.resolvedTree$.map(container => Object.assign(container.node, {
-    children$: container.node.children$.merge(container.node.peerNodeIds.size
-        ? result.resolvedTree$
-          .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
-          .take(container.node.peerNodeIds.size)
-          .map(childNode => childNode.node.absolutePath)
-        : most.empty()
-      ).multicast(),
-  }))
+  return result.resolvedTree$
+    .chain(container => {
+      if (container.isRepeated) {
+        return most.empty()
+      }
+      if (container.isCircular) {
+        return result.resolvedTree$
+          .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
+          .take(1)
+          .chain(nextContainer => {
+            if (nextContainer.node.absolutePath === container.node.absolutePath) {
+              return most.of(nextContainer)
+            }
+            return most.from([nextContainer, container])
+          })
+      }
+      return most.of(container)
+    })
+    .map(container => Object.assign(container.node, {
+      children$: container.node.children$.merge(container.node.peerNodeIds.size
+          ? result.resolvedTree$
+            .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
+            .take(container.node.peerNodeIds.size)
+            .map(childNode => childNode.node.absolutePath)
+          : most.empty()
+        ).multicast(),
+    }))
 }
 
 function resolvePeersOfNode (
@@ -209,12 +229,16 @@ function resolvePeersOfNode (
           depth: node.depth,
           node: ctx.resolvedTree[absolutePath],
           nodeId: node.nodeId,
+          isRepeated: false,
+          isCircular: node.isCircular,
         }
       }
       return {
         depth: node.depth,
         node: ctx.resolvedTree[absolutePath],
         nodeId: node.nodeId,
+        isRepeated: true,
+        isCircular: node.isCircular,
       }
   }, most.fromPromise(
     allResolvedPeers$

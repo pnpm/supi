@@ -64,6 +64,7 @@ export type TreeNode = {
   pkg: InstalledPackage,
   depth: number,
   installable: boolean,
+  isCircular: boolean,
 }
 
 export type TreeNodeMap = {
@@ -412,6 +413,7 @@ async function installInContext (
       children$: buildTree(installCtx, nodeId, rootPkg.installedPkg.id, 1, rootPkg.installedPkg.installable),
       depth: 0,
       installable: rootPkg.installedPkg.installable,
+      isCircular: false,
     }
   }
 
@@ -567,6 +569,7 @@ function buildTree (
       const childNodeId = `${parentNodeId}${childId}:`
       installable = installable && !ctx.skipped.has(childId)
       ctx.tree[childNodeId] = {
+        isCircular: parentNodeId.includes(`:${childId}:`),
         nodeId: childNodeId,
         pkg: ctx.installs[childId],
         children$: buildTree(ctx, childNodeId, childId, depth + 1, installable),
