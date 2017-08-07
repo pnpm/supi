@@ -12,17 +12,20 @@ import {Resolution} from 'package-store'
 import R = require('ramda')
 import {Package} from '../types'
 
-export default function (
+export default async function (
   pkgsToLink: DependencyTreeNodeMap,
   shrinkwrap: Shrinkwrap,
   pkg: Package
-): Shrinkwrap {
+): Promise<Shrinkwrap> {
   shrinkwrap.packages = shrinkwrap.packages || {}
   for (const dependencyAbsolutePath of R.keys(pkgsToLink)) {
     const dependencyPath = dp.relative(shrinkwrap.registry, dependencyAbsolutePath)
     const result = R.partition(
       (childResolvedId: string) => pkgsToLink[dependencyAbsolutePath].optionalDependencies.has(pkgsToLink[childResolvedId].name),
-      pkgsToLink[dependencyAbsolutePath].children
+      await pkgsToLink[dependencyAbsolutePath].children.reduce((acc: string[], childAbsolutePath) => {
+        acc.push(childAbsolutePath)
+        return acc
+      }, [])
     )
     shrinkwrap.packages[dependencyPath] = toShrDependency({
       dependencyAbsolutePath,

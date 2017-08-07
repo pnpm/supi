@@ -10,6 +10,13 @@ import logger from 'pnpm-logger'
 import path = require('path')
 import {InstalledPackage} from '../install/installMultiple'
 import {TreeNode, TreeNodeMap} from '../api/install'
+import most = require('most')
+
+type DependencyTreeNodeContainer = {
+  nodeId: string,
+  node: _DependencyTreeNode,
+  depth: number,
+}
 
 export type DependencyTreeNode = {
   name: string,
@@ -21,7 +28,7 @@ export type DependencyTreeNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children: string[],
+  children: most.Stream<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
   independent: boolean,
@@ -34,6 +41,34 @@ export type DependencyTreeNode = {
   installable: boolean,
 }
 
+type _DependencyTreeNode = {
+  name: string,
+  // at this point the version is really needed only for logging
+  version: string,
+  hasBundledDependencies: boolean,
+  path: string,
+  modules: string,
+  fetchingFiles: Promise<PackageContentInfo>,
+  resolution: Resolution,
+  hardlinkedLocation: string,
+  children: most.Stream<string>,
+  peerNodeIds: Set<string>,
+  // an independent package is a package that
+  // has neither regular nor peer dependencies
+  independent: boolean,
+  optionalDependencies: Set<string>,
+  depth: number,
+  absolutePath: string,
+  dev: boolean,
+  optional: boolean,
+  id: string,
+  installable: boolean,
+}
+
+type _DependencyTreeNodeMap = {
+  [nodeId: string]: _DependencyTreeNode
+}
+
 export type DependencyTreeNodeMap = {
   // a node ID is the join of the package's keypath with a colon
   // E.g., a subdeps node ID which parent is `foo` will be
@@ -41,7 +76,7 @@ export type DependencyTreeNodeMap = {
   [nodeId: string]: DependencyTreeNode
 }
 
-export default async function (
+export default function (
   tree: TreeNodeMap,
   rootNodeIds: string[],
   topPkgIds: string[],
@@ -54,7 +89,7 @@ export default async function (
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
-): Promise<DependencyTreeNodeMap> {
+): most.Stream<DependencyTreeNode> {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
       parent.name,
@@ -65,99 +100,137 @@ export default async function (
     ])
   )
 
-  const nodeIdToResolvedId = {}
-  const resolvedTree: DependencyTreeNodeMap = {}
-  await resolvePeersOfChildren(new Set(rootNodeIds), pkgsByName, {
+  const result = resolvePeersOfChildren(most.just(new Set(rootNodeIds)), pkgsByName, {
     tree,
-    nodeIdToResolvedId,
-    resolvedTree,
+    resolvedTree: {},
     independentLeaves,
     nodeModules,
     nonDevPackageIds: opts.nonDevPackageIds,
     nonOptionalPackageIds: opts.nonOptionalPackageIds,
   })
 
-  R.values(resolvedTree).forEach(node => {
-    node.children = node.children.map(child => nodeIdToResolvedId[child])
-  })
-  return resolvedTree
+  return result.resolvedTree$.map(container => Object.assign(container.node, {
+    children: container.node.children.merge(container.node.peerNodeIds.size
+        ? result.resolvedTree$
+          .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
+          .take(container.node.peerNodeIds.size)
+          .map(childNode => childNode.node.absolutePath)
+        : most.empty()
+      ).multicast(),
+  }))
 }
 
-async function resolvePeersOfNode (
+function resolvePeersOfNode (
   nodeId: string,
   parentPkgs: ParentRefs,
   ctx: {
     tree: TreeNodeMap,
-    nodeIdToResolvedId: {[nodeId: string]: string},
-    resolvedTree: DependencyTreeNodeMap,
+    resolvedTree: _DependencyTreeNodeMap,
     independentLeaves: boolean,
     nodeModules: string,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
-): Promise<Set<string>> {
+): {
+  resolvedTree$: most.Stream<DependencyTreeNodeContainer>,
+  allResolvedPeers$: most.Stream<string>
+} {
   const node = ctx.tree[nodeId]
 
-  const children = await node.children
+  const children$ = most.fromPromise(node.children
     .reduce((acc: string[], child: string) => {
       acc.push(child)
       return acc
-    }, [])
-  const childrenSet = new Set(children)
-  const unknownResolvedPeersOfChildren = await resolvePeersOfChildren(childrenSet, parentPkgs, ctx)
+    }, [])).multicast()
 
-  const resolvedPeers = R.isEmpty(node.pkg.peerDependencies)
-    ? new Set<string>()
-    : resolvePeers(node, Object.assign({}, parentPkgs,
-      toPkgByName(R.props<TreeNode>(children, ctx.tree))
-    ), ctx.tree)
+  const childrenSet$ = children$.map(children => new Set(children)).multicast()
 
-  unknownResolvedPeersOfChildren.delete(nodeId)
+  const result = resolvePeersOfChildren(childrenSet$, parentPkgs, ctx)
 
-  const allResolvedPeers = union(
-    unknownResolvedPeersOfChildren,
-    resolvedPeers)
+  const unknownResolvedPeersOfChildren$ = result.allResolvedPeers$
+    .filter(unresolvedPeerNodeId => unresolvedPeerNodeId !== nodeId)
 
-  let modules: string
-  let absolutePath: string
-  const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
-  if (!allResolvedPeers.size) {
-    modules = path.join(localLocation, 'node_modules')
-    absolutePath = node.pkg.id
-  } else {
-    const peersFolder = createPeersFolderName(R.props<TreeNode>(Array.from(allResolvedPeers), ctx.tree).map(node => node.pkg))
-    modules = path.join(localLocation, peersFolder, 'node_modules')
-    absolutePath = `${node.pkg.id}/${peersFolder}`
+  const resolvedPeers$ = (
+    R.isEmpty(node.pkg.peerDependencies)
+      ? most.empty() as most.Stream<string>
+      : children$.chain(children => resolvePeers(node, Object.assign({}, parentPkgs,
+        toPkgByName(R.props<TreeNode>(children, ctx.tree))
+      ), ctx.tree))
+  ).multicast()
+
+  const allResolvedPeers$ = most.merge(
+    unknownResolvedPeersOfChildren$,
+    resolvedPeers$
+  ).multicast()
+
+  const resolvedNode$ = most.combine((allResolvedPeers, childrenSet, resolvedPeers) => {
+      let modules: string
+      let absolutePath: string
+      const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
+      if (!allResolvedPeers.size) {
+        modules = path.join(localLocation, 'node_modules')
+        absolutePath = node.pkg.id
+      } else {
+        const peersFolder = createPeersFolderName(R.props<TreeNode>(Array.from(allResolvedPeers), ctx.tree).map(node => node.pkg))
+        modules = path.join(localLocation, peersFolder, 'node_modules')
+        absolutePath = `${node.pkg.id}/${peersFolder}`
+      }
+
+      if (!ctx.resolvedTree[absolutePath] || ctx.resolvedTree[absolutePath].depth > node.depth) {
+        const independent = ctx.independentLeaves && !childrenSet.size && R.isEmpty(node.pkg.peerDependencies)
+        const pathToUnpacked = path.join(node.pkg.path, 'node_modules', node.pkg.name)
+        const hardlinkedLocation = !independent
+          ? path.join(modules, node.pkg.name)
+          : pathToUnpacked
+        ctx.resolvedTree[absolutePath] = {
+          name: node.pkg.name,
+          version: node.pkg.version,
+          hasBundledDependencies: node.pkg.hasBundledDependencies,
+          fetchingFiles: node.pkg.fetchingFiles,
+          resolution: node.pkg.resolution,
+          path: pathToUnpacked,
+          modules,
+          hardlinkedLocation,
+          independent,
+          optionalDependencies: node.pkg.optionalDependencies,
+          children: result.resolvedTree$
+            .filter(childNode => childNode.depth === node.depth + 1)
+            .take(childrenSet.size)
+            .map(childNode => childNode.node.absolutePath),
+          peerNodeIds: difference(resolvedPeers, childrenSet),
+          depth: node.depth,
+          absolutePath,
+          dev: !ctx.nonDevPackageIds.has(node.pkg.id),
+          optional: !ctx.nonOptionalPackageIds.has(node.pkg.id),
+          id: node.pkg.id,
+          installable: node.installable,
+        }
+        return {
+          depth: node.depth,
+          node: ctx.resolvedTree[absolutePath],
+          nodeId: node.nodeId,
+        }
+      }
+      return {
+        depth: node.depth,
+        node: ctx.resolvedTree[absolutePath],
+        nodeId: node.nodeId,
+      }
+  }, most.fromPromise(
+    allResolvedPeers$
+      .reduce((acc: Set<string>, peer: string) => {
+        acc.add(peer)
+        return acc
+      }, new Set())
+  ), childrenSet$, most.fromPromise(resolvedPeers$.reduce((acc: Set<string>, peer: string) => {
+      acc.add(peer)
+      return acc
+    }, new Set<string>())))
+
+  return {
+    allResolvedPeers$: allResolvedPeers$,
+    resolvedTree$: most.merge(resolvedNode$, result.resolvedTree$),
   }
-
-  ctx.nodeIdToResolvedId[nodeId] = absolutePath
-  if (!ctx.resolvedTree[absolutePath] || ctx.resolvedTree[absolutePath].depth > node.depth) {
-    const independent = ctx.independentLeaves && !children.length && R.isEmpty(node.pkg.peerDependencies)
-    const pathToUnpacked = path.join(node.pkg.path, 'node_modules', node.pkg.name)
-    const hardlinkedLocation = !independent
-      ? path.join(modules, node.pkg.name)
-      : pathToUnpacked
-    ctx.resolvedTree[absolutePath] = {
-      name: node.pkg.name,
-      version: node.pkg.version,
-      hasBundledDependencies: node.pkg.hasBundledDependencies,
-      fetchingFiles: node.pkg.fetchingFiles,
-      resolution: node.pkg.resolution,
-      path: pathToUnpacked,
-      modules,
-      hardlinkedLocation,
-      independent,
-      optionalDependencies: node.pkg.optionalDependencies,
-      children: Array.from(union(childrenSet, resolvedPeers)),
-      depth: node.depth,
-      absolutePath,
-      dev: !ctx.nonDevPackageIds.has(node.pkg.id),
-      optional: !ctx.nonOptionalPackageIds.has(node.pkg.id),
-      id: node.pkg.id,
-      installable: node.installable,
-    }
-  }
-  return allResolvedPeers
 }
 
 function addMany<T>(a: Set<T>, b: Set<T>) {
@@ -175,64 +248,72 @@ function difference<T>(a: Set<T>, b: Set<T>) {
   return new Set(Array.from(a).filter(el => !b.has(el)))
 }
 
-async function resolvePeersOfChildren (
-  children: Set<string>,
+function resolvePeersOfChildren (
+  children: most.Stream<Set<string>>,
   parentParentPkgs: ParentRefs,
   ctx: {
     tree: {[nodeId: string]: TreeNode},
-    nodeIdToResolvedId: {[nodeId: string]: string},
-    resolvedTree: DependencyTreeNodeMap,
+    resolvedTree: _DependencyTreeNodeMap,
     independentLeaves: boolean,
     nodeModules: string,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
-): Promise<Set<string>> {
-  const childrenArray = Array.from(children)
-  let allResolvedPeers = new Set()
-  const parentPkgs = Object.assign({}, parentParentPkgs,
-    toPkgByName(R.props<TreeNode>(childrenArray, ctx.tree))
-  )
+): {
+  resolvedTree$: most.Stream<DependencyTreeNodeContainer>,
+  allResolvedPeers$: most.Stream<string>
+} {
+  const result = children.chain(children => {
+    const childrenArray = Array.from(children)
+    const parentPkgs = Object.assign({}, parentParentPkgs,
+      toPkgByName(R.props<TreeNode>(childrenArray, ctx.tree))
+    )
 
-  for (const child of childrenArray) {
-    addMany(allResolvedPeers, await resolvePeersOfNode(child, parentPkgs, ctx))
+    return most.from(childrenArray)
+      .map(child => resolvePeersOfNode(child, parentPkgs, ctx))
+      .map(result => ({
+        allResolvedPeers$: result.allResolvedPeers$.filter(resolvedPeer => !children.has(resolvedPeer)),
+        resolvedTree$: result.resolvedTree$,
+      }))
+  }).multicast()
+
+  return {
+    allResolvedPeers$: result.chain(result => result.allResolvedPeers$).multicast(),
+    resolvedTree$: result.chain(result => result.resolvedTree$).multicast(),
   }
-
-  const unknownResolvedPeersOfChildren = difference(allResolvedPeers, children)
-
-  return unknownResolvedPeersOfChildren
 }
 
 function resolvePeers (
   node: TreeNode,
   parentPkgs: ParentRefs,
   tree: TreeNodeMap
-): Set<string> {
-  const resolvedPeers = new Set<string>()
-  for (const peerName in node.pkg.peerDependencies) {
-    const peerVersionRange = node.pkg.peerDependencies[peerName]
+): most.Stream<string> {
+  return most.from(R.keys(node.pkg.peerDependencies))
+    .chain(peerName => {
+      const peerVersionRange = node.pkg.peerDependencies[peerName]
 
-    const resolved = parentPkgs[peerName]
+      const resolved = parentPkgs[peerName]
 
-    if (!resolved || resolved.nodeId && !tree[resolved.nodeId].installable) {
-      logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but none was installed.`)
-      continue
-    }
+      if (!resolved || resolved.nodeId && !tree[resolved.nodeId].installable) {
+        logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but none was installed.`)
+        return most.empty()
+      }
 
-    if (!semver.satisfies(resolved.version, peerVersionRange)) {
-      logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but version ${resolved.version} was installed.`)
-    }
+      if (!semver.satisfies(resolved.version, peerVersionRange)) {
+        logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but version ${resolved.version} was installed.`)
+      }
 
-    if (resolved.depth === 0 || resolved.depth === node.depth + 1) {
-      // if the resolved package is a top dependency
-      // or the peer dependency is resolved from a regular dependency of the package
-      // then there is no need to link it in
-      continue
-    }
+      if (resolved.depth === 0 || resolved.depth === node.depth + 1) {
+        // if the resolved package is a top dependency
+        // or the peer dependency is resolved from a regular dependency of the package
+        // then there is no need to link it in
+        return most.empty()
+      }
 
-    if (resolved && resolved.nodeId) resolvedPeers.add(resolved.nodeId)
-  }
-  return resolvedPeers
+      if (resolved && resolved.nodeId) return most.just(resolved.nodeId)
+
+      return most.empty()
+    })
 }
 
 type ParentRefs = {

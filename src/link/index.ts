@@ -54,7 +54,7 @@ export default async function (
 }> {
   const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
-  const pkgsToLink = await resolvePeers(
+  const pkgsToLink: DependencyTreeNodeMap = await resolvePeers(
     tree,
     rootNodeIds,
     topPkgIds,
@@ -64,7 +64,12 @@ export default async function (
       nonDevPackageIds: opts.nonDevPackageIds,
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
-  const newShr = updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
+    .reduce((acc, tree) => {
+      acc[tree.absolutePath] = tree
+      return acc
+    }, {})
+
+  const newShr = await updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
 
   await removeOrphanPkgs({
     oldShrinkwrap: opts.privateShrinkwrap,
@@ -266,11 +271,10 @@ async function linkAllBins (
           ? dependency.children
           : dependency.children.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
 
-      await Promise.all(
-        R.props<DependencyTreeNode>(childrenToLink, pkgMap)
+      await childrenToLink
+          .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
-          .map(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
-      )
+          .forEach(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
 
       // link also the bundled dependencies` bins
       if (dependency.hasBundledDependencies) {
@@ -296,11 +300,10 @@ async function linkAllModules (
           ? dependency.children
           : dependency.children.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
 
-        await Promise.all(
-          R.props<DependencyTreeNode>(childrenToLink, pkgMap)
-            .filter(child => child.installable)
-            .map(child => symlinkDependencyTo(child, dependency.modules))
-        )
+        await childrenToLink
+          .map(childAbsolutePath => pkgMap[childAbsolutePath])
+          .filter(child => child.installable)
+          .forEach(child => symlinkDependencyTo(child, dependency.modules))
       }))
   )
 }
