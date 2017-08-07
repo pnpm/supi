@@ -274,7 +274,9 @@ async function linkAllBins (
       await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
-          .forEach(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
+          .map(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
+          .await()
+          .forEach(() => {})
 
       // link also the bundled dependencies` bins
       if (dependency.hasBundledDependencies) {
@@ -303,7 +305,9 @@ async function linkAllModules (
         await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
-          .forEach(child => symlinkDependencyTo(child, dependency.modules))
+          .map(child => symlinkDependencyTo(child, dependency.modules))
+          .await()
+          .forEach(() => {})
       }))
   )
 }
