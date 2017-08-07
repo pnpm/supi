@@ -267,11 +267,11 @@ async function linkAllBins (
     pkgs.map(dependency => limitLinking(async () => {
       const binPath = path.join(dependency.hardlinkedLocation, 'node_modules', '.bin')
 
-      const childrenToLink = opts.optional
-          ? dependency.children
-          : dependency.children.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
+      const childrenToLink$ = opts.optional
+          ? dependency.children$
+          : dependency.children$.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
 
-      await childrenToLink
+      await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
           .forEach(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
@@ -296,11 +296,11 @@ async function linkAllModules (
     pkgs
       .filter(dependency => !dependency.independent)
       .map(dependency => limitLinking(async () => {
-        const childrenToLink = opts.optional
-          ? dependency.children
-          : dependency.children.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
+        const childrenToLink$ = opts.optional
+          ? dependency.children$
+          : dependency.children$.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
 
-        await childrenToLink
+        await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
           .forEach(child => symlinkDependencyTo(child, dependency.modules))

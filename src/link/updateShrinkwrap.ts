@@ -22,7 +22,7 @@ export default async function (
     const dependencyPath = dp.relative(shrinkwrap.registry, dependencyAbsolutePath)
     const result = R.partition(
       (childResolvedId: string) => pkgsToLink[dependencyAbsolutePath].optionalDependencies.has(pkgsToLink[childResolvedId].name),
-      await pkgsToLink[dependencyAbsolutePath].children.reduce((acc: string[], childAbsolutePath) => {
+      await pkgsToLink[dependencyAbsolutePath].children$.reduce((acc: string[], childAbsolutePath) => {
         acc.push(childAbsolutePath)
         return acc
       }, [])

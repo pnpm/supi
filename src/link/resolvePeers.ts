@@ -28,7 +28,7 @@ export type DependencyTreeNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children: most.Stream<string>,
+  children$: most.Stream<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
   independent: boolean,
@@ -51,7 +51,7 @@ type _DependencyTreeNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children: most.Stream<string>,
+  children$: most.Stream<string>,
   peerNodeIds: Set<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
@@ -110,7 +110,7 @@ export default function (
   })
 
   return result.resolvedTree$.map(container => Object.assign(container.node, {
-    children: container.node.children.merge(container.node.peerNodeIds.size
+    children$: container.node.children$.merge(container.node.peerNodeIds.size
         ? result.resolvedTree$
           .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
           .take(container.node.peerNodeIds.size)
@@ -137,7 +137,7 @@ function resolvePeersOfNode (
 } {
   const node = ctx.tree[nodeId]
 
-  const children$ = most.fromPromise(node.children
+  const children$ = most.fromPromise(node.children$
     .reduce((acc: string[], child: string) => {
       acc.push(child)
       return acc
@@ -193,7 +193,7 @@ function resolvePeersOfNode (
           hardlinkedLocation,
           independent,
           optionalDependencies: node.pkg.optionalDependencies,
-          children: result.resolvedTree$
+          children$: result.resolvedTree$
             .filter(childNode => childNode.depth === node.depth + 1)
             .take(childrenSet.size)
             .map(childNode => childNode.node.absolutePath),
@@ -249,7 +249,7 @@ function difference<T>(a: Set<T>, b: Set<T>) {
 }
 
 function resolvePeersOfChildren (
-  children: most.Stream<Set<string>>,
+  children$: most.Stream<Set<string>>,
   parentParentPkgs: ParentRefs,
   ctx: {
     tree: {[nodeId: string]: TreeNode},
@@ -263,7 +263,7 @@ function resolvePeersOfChildren (
   resolvedTree$: most.Stream<DependencyTreeNodeContainer>,
   allResolvedPeers$: most.Stream<string>
 } {
-  const result = children.chain(children => {
+  const result = children$.chain(children => {
     const childrenArray = Array.from(children)
     const parentPkgs = Object.assign({}, parentParentPkgs,
       toPkgByName(R.props<TreeNode>(childrenArray, ctx.tree))

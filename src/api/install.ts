@@ -60,7 +60,7 @@ export type InstalledPackages = {
 
 export type TreeNode = {
   nodeId: string,
-  children: most.Stream<string>, // Node IDs of children
+  children$: most.Stream<string>, // Node IDs of children
   pkg: InstalledPackage,
   depth: number,
   installable: boolean,
@@ -386,13 +386,13 @@ async function installInContext (
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     (spec: PackageSpec) => !spec.name || safeIsInnerLink(nodeModulesPath, spec.name, {storePath: ctx.storePath}))
-  const installedPkgs = installMultiple(
+  const installedPkgs$ = installMultiple(
     installCtx,
     nonLinkedPkgs,
     installOpts
   )
 
-  const rootPkgs = await installedPkgs
+  const rootPkgs = await installedPkgs$
     .filter(installedPkg => installedPkg.depth === 0)
     .take(nonLinkedPkgs.length)
     .reduce((acc: PkgAddress[], pkgAddress: PkgAddress) => {
@@ -409,13 +409,13 @@ async function installInContext (
     installCtx.tree[nodeId] = {
       nodeId,
       pkg: rootPkg.installedPkg,
-      children: buildTree(installCtx, nodeId, rootPkg.installedPkg.id, 1, rootPkg.installedPkg.installable),
+      children$: buildTree(installCtx, nodeId, rootPkg.installedPkg.id, 1, rootPkg.installedPkg.installable),
       depth: 0,
       installable: rootPkg.installedPkg.installable,
     }
   }
 
-  installedPkgs.subscribe({
+  installedPkgs$.subscribe({
     error: () => {},
     next: () => {},
     complete: () => stageLogger.debug('resolution_done'),
@@ -561,7 +561,7 @@ function buildTree (
   depth: number,
   installable: boolean
 ) {
-  return ctx.installs[parentId].children
+  return ctx.installs[parentId].children$
     .filter(childId => parentNodeId.indexOf(`:${parentId}:${childId}:`) === -1)
     .map(childId => {
       const childNodeId = `${parentNodeId}${childId}:`
@@ -569,7 +569,7 @@ function buildTree (
       ctx.tree[childNodeId] = {
         nodeId: childNodeId,
         pkg: ctx.installs[childId],
-        children: buildTree(ctx, childNodeId, childId, depth + 1, installable),
+        children$: buildTree(ctx, childNodeId, childId, depth + 1, installable),
         depth,
         installable,
       }

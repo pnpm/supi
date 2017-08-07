@@ -49,7 +49,7 @@ export type InstalledPackage = {
   optionalDependencies: Set<string>,
   hasBundledDependencies: boolean,
   installable: boolean,
-  children: most.Stream<string>,
+  children$: most.Stream<string>,
 }
 
 export default function installMultiple (
@@ -292,7 +292,7 @@ async function install (
       ctx.skipped.add(fetchedPkg.id)
     }
 
-    const children = installDependencies(
+    const children$ = installDependencies(
       pkg,
       spec,
       ctx,
@@ -322,7 +322,7 @@ async function install (
       peerDependencies: pkg.peerDependencies || {},
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
-      children: children
+      children$: children$
         .filter(child => child.depth === options.currentDepth + 1)
         .map(child => child.installedPkg.id),
       installable: currentIsInstallable,
@@ -332,7 +332,7 @@ async function install (
       installedPkg: ctx.installs[fetchedPkg.id],
       depth: options.currentDepth,
       specRaw: spec.raw,
-    }, children)
+    }, children$)
   }
 
   return most.just({
