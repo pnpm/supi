@@ -31,9 +31,9 @@ import getIsInstallable from './getIsInstallable'
 import semver = require('semver')
 import most = require('most')
 
-export type PkgAddress = {
+export type PackageRequest = {
   specRaw: string,
-  installedPkg: InstalledPackage,
+  package: InstalledPackage,
   depth: number,
 }
 
@@ -64,7 +64,7 @@ export default function installMultiple (
     parentIsInstallable?: boolean,
     update: boolean,
   }
-): most.Stream<PkgAddress> {
+): most.Stream<PackageRequest> {
   const resolvedDependencies = options.resolvedDependencies || {}
   const preferedDependencies = options.preferedDependencies || {}
   const update = options.update && options.currentDepth <= ctx.depth
@@ -173,7 +173,7 @@ async function install (
     update: boolean,
     proceed: boolean,
   }
-): Promise<most.Stream<PkgAddress>> {
+): Promise<most.Stream<PackageRequest>> {
   const keypath = options.keypath || []
   const proceed = options.proceed || !options.shrinkwrapResolution || ctx.force || keypath.length <= ctx.depth
   const parentIsInstallable = options.parentIsInstallable === undefined || options.parentIsInstallable
@@ -324,19 +324,19 @@ async function install (
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
       children$: children$
         .filter(child => child.depth === options.currentDepth + 1)
-        .map(child => child.installedPkg.id),
+        .map(child => child.package.id),
       installable: currentIsInstallable,
     }
 
     return most.startWith({
-      installedPkg: ctx.installs[fetchedPkg.id],
+      package: ctx.installs[fetchedPkg.id],
       depth: options.currentDepth,
       specRaw: spec.raw,
     }, children$)
   }
 
   return most.just({
-    installedPkg: ctx.installs[fetchedPkg.id],
+    package: ctx.installs[fetchedPkg.id],
     depth: options.currentDepth,
     specRaw: spec.raw,
   })
@@ -360,8 +360,7 @@ function installDependencies (
     parentIsInstallable: boolean,
     update: boolean,
   }
-): most.Stream<PkgAddress> {
-
+): most.Stream<PackageRequest> {
   const bundledDeps = pkg.bundleDependencies || pkg.bundledDependencies || []
   const filterDeps = getNotBundledDeps.bind(null, bundledDeps)
   const deps = depsToSpecs(

@@ -15,7 +15,7 @@ import safeIsInnerLink from '../safeIsInnerLink'
 import {fromDir as safeReadPkgFromDir} from '../fs/safeReadPkg'
 import {PnpmOptions, StrictPnpmOptions, Dependencies} from '../types'
 import getContext, {PnpmContext} from './getContext'
-import installMultiple, {InstalledPackage, PkgAddress} from '../install/installMultiple'
+import installMultiple, {InstalledPackage, PackageRequest} from '../install/installMultiple'
 import externalLink from './link'
 import linkPackages from '../link'
 import save from '../save'
@@ -29,7 +29,7 @@ import {
   Shrinkwrap,
   ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
-import {syncShrinkwrapWithPackage} from '../fs/shrinkwrap'
+import {syncShrinkwrapWithManifest} from '../fs/shrinkwrap'
 import {
   save as saveModules,
   LAYOUT_VERSION,
@@ -387,45 +387,45 @@ async function installInContext (
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     (spec: PackageSpec) => !spec.name || safeIsInnerLink(nodeModulesPath, spec.name, {storePath: ctx.storePath}))
-  const installedPkgs$ = installMultiple(
+  const packageRequests$ = installMultiple(
     installCtx,
     nonLinkedPkgs,
     installOpts
   )
 
-  const rootPkgs = await installedPkgs$
-    .filter(installedPkg => installedPkg.depth === 0)
+  const rootPackageRequests = await packageRequests$
+    .filter(request => request.depth === 0)
     .take(nonLinkedPkgs.length)
-    .reduce((acc: PkgAddress[], pkgAddress: PkgAddress) => {
-      acc.push(pkgAddress)
+    .reduce((acc: PackageRequest[], packageRequest: PackageRequest) => {
+      acc.push(packageRequest)
       return acc
     }, [])
 
   installCtx.tree = {}
   const rootNodeIds: string[] = []
 
-  for (const rootPkg of rootPkgs) {
-    const nodeId = `:/:${rootPkg.installedPkg.id}:`
+  for (const packageRequest of rootPackageRequests) {
+    const nodeId = `:/:${packageRequest.package.id}:`
     rootNodeIds.push(nodeId)
     installCtx.tree[nodeId] = {
       nodeId,
-      pkg: rootPkg.installedPkg,
-      children$: buildTree(installCtx, nodeId, rootPkg.installedPkg.id, 1, rootPkg.installedPkg.installable),
+      pkg: packageRequest.package,
+      children$: buildTree(installCtx, nodeId, packageRequest.package.id, 1, packageRequest.package.installable),
       depth: 0,
-      installable: rootPkg.installedPkg.installable,
+      installable: packageRequest.package.installable,
       isCircular: false,
     }
   }
 
-  installedPkgs$.subscribe({
+  packageRequests$.subscribe({
     error: () => {},
     next: () => {},
     complete: () => stageLogger.debug('resolution_done'),
   })
 
-  const pkgByRawSpec = await rootPkgs
-    .reduce((acc: {}, pkgAddress: PkgAddress) => {
-      acc[pkgAddress.specRaw] = pkgAddress.installedPkg
+  const pkgByRawSpec = await rootPackageRequests
+    .reduce((acc: {}, packageRequest: PackageRequest) => {
+      acc[packageRequest.specRaw] = packageRequest.package
       return acc
     }, {})
   const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
@@ -458,11 +458,11 @@ async function installInContext (
   }
 
   if (newPkg) {
-    syncShrinkwrapWithPackage(ctx.shrinkwrap, newPkg, pkgsToSave.map(pkgToSave => {
-      const pti = packagesToInstall.find(pti => pti.name === pkgToSave.name)
-      return Object.assign({}, pkgToSave, {
-        dev: !!(pti && pti.dev),
-        optional: !!(pti && pti.optional),
+    syncShrinkwrapWithManifest(ctx.shrinkwrap, newPkg, pkgsToSave.map(wantedPackage => {
+      const realPackage = packagesToInstall.find(realPackage => realPackage.name === wantedPackage.name)
+      return Object.assign({}, wantedPackage, {
+        dev: !!(realPackage && realPackage.dev),
+        optional: !!(realPackage && realPackage.optional),
       })
     }))
   }

@@ -3,7 +3,7 @@ import encodeRegistry = require('encode-registry')
 import {Shrinkwrap} from 'pnpm-shrinkwrap'
 import {Package} from '../types'
 
-export function syncShrinkwrapWithPackage (
+export function syncShrinkwrapWithManifest (
   shrinkwrap: Shrinkwrap,
   pkg: Package,
   pkgsToSave: {
