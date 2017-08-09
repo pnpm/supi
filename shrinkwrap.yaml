@@ -1,4 +1,5 @@
 dependencies:
+  '@reactivex/rxjs': 5.4.2
   '@types/byline': 4.2.31
   '@types/common-tags': 1.2.5
   '@types/load-json-file': 2.0.5
@@ -28,7 +29,6 @@ dependencies:
   load-json-file: 2.0.0
   load-yaml-file: 0.1.0
   mkdirp-promise: 5.0.1
-  most: 1.5.1
   mz: 2.6.0
   ncp: 2.0.0
   node-gyp: 3.6.2
@@ -66,14 +66,11 @@ devDependencies:
   typescript: 2.4.2
   validate-commit-msg: 2.14.0
 packages:
-  /@most/multicast/1.2.5:
+  /@reactivex/rxjs/5.4.2:
     dependencies:
-      '@most/prelude': 1.6.2
+      symbol-observable: 1.0.4
     resolution:
-      integrity: sha1-ulq8mX+aZREJS+wReRT0lZcgqPs=
-  /@most/prelude/1.6.2:
-    resolution:
-      integrity: sha1-4CLbCjUi6kWkJ/c5VwuZ9qa0kWI=
+      integrity: sha1-q1MNu9q3EHE2mCjvEcjXrlWNURY=
   /@types/byline/4.2.31:
     dependencies:
       '@types/node': 8.0.17
@@ -1278,13 +1275,6 @@ packages:
       minimist: 0.0.8
     resolution:
       integrity: sha1-MAV0OOrGz3+MR2fzhkjWaX11yQM=
-  /most/1.5.1:
-    dependencies:
-      '@most/multicast': 1.2.5
-      '@most/prelude': 1.6.2
-      symbol-observable: 1.0.4
-    resolution:
-      integrity: sha1-9XLegOpfMYCP+3ydBPacgbW7lBQ=
   /mute-stream/0.0.6:
     dev: true
     resolution:
@@ -2228,6 +2218,7 @@ packages:
 registry: 'https://registry.npmjs.org/'
 shrinkwrapVersion: 3
 specifiers:
+  '@reactivex/rxjs': ^5.4.2
   '@types/byline': ^4.2.31
   '@types/common-tags': ^1.2.5
   '@types/load-json-file': ^2.0.5
@@ -2260,7 +2251,6 @@ specifiers:
   load-json-file: ^2.0.0
   load-yaml-file: ^0.1.0
   mkdirp-promise: ^5.0.1
-  most: ^1.5.1
   mz: ^2.6.0
   ncp: ^2.0.0
   node-gyp: ^3.6.0

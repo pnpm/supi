@@ -10,7 +10,7 @@ import logger from 'pnpm-logger'
 import path = require('path')
 import {InstalledPackage} from '../install/installMultiple'
 import {TreeNode, TreeNodeMap} from '../api/install'
-import most = require('most')
+import Rx = require('@reactivex/rxjs')
 
 type DependencyTreeNodeContainer = {
   nodeId: string,
@@ -30,7 +30,7 @@ export type DependencyTreeNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children$: most.Stream<string>,
+  children$: Rx.Observable<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
   independent: boolean,
@@ -53,7 +53,7 @@ type _DependencyTreeNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children$: most.Stream<string>,
+  children$: Rx.Observable<string>,
   peerNodeIds: Set<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
@@ -91,7 +91,7 @@ export default function (
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
-): most.Stream<DependencyTreeNode> {
+): Rx.Observable<DependencyTreeNode> {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
       parent.name,
@@ -102,7 +102,7 @@ export default function (
     ])
   )
 
-  const result = resolvePeersOfChildren(most.just(new Set(rootNodeIds)), pkgsByName, {
+  const result = resolvePeersOfChildren(Rx.Observable.of(new Set(rootNodeIds)), pkgsByName, {
     tree,
     resolvedTree: {},
     independentLeaves,
@@ -112,22 +112,22 @@ export default function (
   })
 
   return result.resolvedTree$
-    .chain(container => {
+    .mergeMap(container => {
       if (container.isRepeated) {
-        return most.empty()
+        return Rx.Observable.empty<DependencyTreeNodeContainer>()
       }
       if (container.isCircular) {
         return result.resolvedTree$
           .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
           .take(1)
-          .chain(nextContainer => {
+          .mergeMap(nextContainer => {
             if (nextContainer.node.absolutePath === container.node.absolutePath) {
-              return most.of(nextContainer)
+              return Rx.Observable.of(nextContainer)
             }
-            return most.from([nextContainer, container])
+            return Rx.Observable.from([nextContainer, container])
           })
       }
-      return most.of(container)
+      return Rx.Observable.of(container)
     })
     .map(container => Object.assign(container.node, {
       children$: container.node.children$.merge(container.node.peerNodeIds.size
@@ -135,8 +135,8 @@ export default function (
             .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
             .take(container.node.peerNodeIds.size)
             .map(childNode => childNode.node.absolutePath)
-          : most.empty()
-        ).multicast(),
+          : Rx.Observable.empty()
+        ),
     }))
 }
 
@@ -152,18 +152,18 @@ function resolvePeersOfNode (
     nonOptionalPackageIds: Set<string>,
   }
 ): {
-  resolvedTree$: most.Stream<DependencyTreeNodeContainer>,
-  allResolvedPeers$: most.Stream<string>
+  resolvedTree$: Rx.Observable<DependencyTreeNodeContainer>,
+  allResolvedPeers$: Rx.Observable<string>
 } {
   const node = ctx.tree[nodeId]
 
-  const children$ = most.fromPromise(node.children$
+  const children$ = node.children$
     .reduce((acc: string[], child: string) => {
       acc.push(child)
       return acc
-    }, [])).multicast()
+    }, [])
 
-  const childrenSet$ = children$.map(children => new Set(children)).multicast()
+  const childrenSet$ = children$.map(children => new Set(children))
 
   const result = resolvePeersOfChildren(childrenSet$, parentPkgs, ctx)
 
@@ -172,18 +172,27 @@ function resolvePeersOfNode (
 
   const resolvedPeers$ = (
     R.isEmpty(node.pkg.peerDependencies)
-      ? most.empty() as most.Stream<string>
-      : children$.chain(children => resolvePeers(node, Object.assign({}, parentPkgs,
+      ? Rx.Observable.empty() as Rx.Observable<string>
+      : children$.mergeMap(children => resolvePeers(node, Object.assign({}, parentPkgs,
         toPkgByName(R.props<TreeNode>(children, ctx.tree))
       ), ctx.tree))
-  ).multicast()
+  )
 
-  const allResolvedPeers$ = most.merge(
-    unknownResolvedPeersOfChildren$,
-    resolvedPeers$
-  ).multicast()
+  const allResolvedPeers$ = unknownResolvedPeersOfChildren$.merge(resolvedPeers$)
 
-  const resolvedNode$ = most.combine((allResolvedPeers, childrenSet, resolvedPeers) => {
+  const resolvedNode$ = Rx.Observable.combineLatest(
+    allResolvedPeers$
+      .reduce((acc: Set<string>, peer: string) => {
+        acc.add(peer)
+        return acc
+      }, new Set()
+    ),
+    childrenSet$,
+    resolvedPeers$.reduce((acc: Set<string>, peer: string) => {
+      acc.add(peer)
+      return acc
+    }, new Set<string>()),
+    (allResolvedPeers, childrenSet, resolvedPeers) => {
       let modules: string
       let absolutePath: string
       const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
@@ -240,20 +249,11 @@ function resolvePeersOfNode (
         isRepeated: true,
         isCircular: node.isCircular,
       }
-  }, most.fromPromise(
-    allResolvedPeers$
-      .reduce((acc: Set<string>, peer: string) => {
-        acc.add(peer)
-        return acc
-      }, new Set())
-  ), childrenSet$, most.fromPromise(resolvedPeers$.reduce((acc: Set<string>, peer: string) => {
-      acc.add(peer)
-      return acc
-    }, new Set<string>())))
+  })
 
   return {
     allResolvedPeers$: allResolvedPeers$,
-    resolvedTree$: most.merge(resolvedNode$, result.resolvedTree$),
+    resolvedTree$: resolvedNode$.merge(result.resolvedTree$),
   }
 }
 
@@ -273,7 +273,7 @@ function difference<T>(a: Set<T>, b: Set<T>) {
 }
 
 function resolvePeersOfChildren (
-  children$: most.Stream<Set<string>>,
+  children$: Rx.Observable<Set<string>>,
   parentParentPkgs: ParentRefs,
   ctx: {
     tree: {[nodeId: string]: TreeNode},
@@ -284,26 +284,26 @@ function resolvePeersOfChildren (
     nonOptionalPackageIds: Set<string>,
   }
 ): {
-  resolvedTree$: most.Stream<DependencyTreeNodeContainer>,
-  allResolvedPeers$: most.Stream<string>
+  resolvedTree$: Rx.Observable<DependencyTreeNodeContainer>,
+  allResolvedPeers$: Rx.Observable<string>
 } {
-  const result = children$.chain(children => {
+  const result = children$.mergeMap(children => {
     const childrenArray = Array.from(children)
     const parentPkgs = Object.assign({}, parentParentPkgs,
       toPkgByName(R.props<TreeNode>(childrenArray, ctx.tree))
     )
 
-    return most.from(childrenArray)
+    return Rx.Observable.from(childrenArray)
       .map(child => resolvePeersOfNode(child, parentPkgs, ctx))
       .map(result => ({
         allResolvedPeers$: result.allResolvedPeers$.filter(resolvedPeer => !children.has(resolvedPeer)),
         resolvedTree$: result.resolvedTree$,
       }))
-  }).multicast()
+  })
 
   return {
-    allResolvedPeers$: result.chain(result => result.allResolvedPeers$).multicast(),
-    resolvedTree$: result.chain(result => result.resolvedTree$).multicast(),
+    allResolvedPeers$: result.mergeMap(result => result.allResolvedPeers$),
+    resolvedTree$: result.mergeMap(result => result.resolvedTree$).shareReplay(Infinity),
   }
 }
 
@@ -311,16 +311,16 @@ function resolvePeers (
   node: TreeNode,
   parentPkgs: ParentRefs,
   tree: TreeNodeMap
-): most.Stream<string> {
-  return most.from(R.keys(node.pkg.peerDependencies))
-    .chain(peerName => {
+): Rx.Observable<string> {
+  return Rx.Observable.from(R.keys(node.pkg.peerDependencies))
+    .mergeMap(peerName => {
       const peerVersionRange = node.pkg.peerDependencies[peerName]
 
       const resolved = parentPkgs[peerName]
 
       if (!resolved || resolved.nodeId && !tree[resolved.nodeId].installable) {
         logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but none was installed.`)
-        return most.empty()
+        return Rx.Observable.empty()
       }
 
       if (!semver.satisfies(resolved.version, peerVersionRange)) {
@@ -331,12 +331,12 @@ function resolvePeers (
         // if the resolved package is a top dependency
         // or the peer dependency is resolved from a regular dependency of the package
         // then there is no need to link it in
-        return most.empty()
+        return Rx.Observable.empty()
       }
 
-      if (resolved && resolved.nodeId) return most.just(resolved.nodeId)
+      if (resolved && resolved.nodeId) return Rx.Observable.of(resolved.nodeId)
 
-      return most.empty()
+      return Rx.Observable.empty()
     })
 }
 

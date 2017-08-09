@@ -25,7 +25,7 @@ export default async function (
       await pkgsToLink[dependencyAbsolutePath].children$.reduce((acc: string[], childAbsolutePath) => {
         acc.push(childAbsolutePath)
         return acc
-      }, [])
+      }, []).toPromise()
     )
     shrinkwrap.packages[dependencyPath] = toShrDependency({
       dependencyAbsolutePath,

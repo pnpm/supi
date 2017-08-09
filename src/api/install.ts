@@ -52,7 +52,7 @@ import {
 } from 'package-store'
 import depsFromPackage from '../depsFromPackage'
 import writePkg = require('write-pkg')
-import most = require('most')
+import Rx = require('@reactivex/rxjs')
 
 export type InstalledPackages = {
   [name: string]: InstalledPackage
@@ -60,7 +60,7 @@ export type InstalledPackages = {
 
 export type TreeNode = {
   nodeId: string,
-  children$: most.Stream<string>, // Node IDs of children
+  children$: Rx.Observable<string>, // Node IDs of children
   pkg: InstalledPackage,
   depth: number,
   installable: boolean,
@@ -400,6 +400,7 @@ async function installInContext (
       acc.push(packageRequest)
       return acc
     }, [])
+    .toPromise()
 
   installCtx.tree = {}
   const rootNodeIds: string[] = []

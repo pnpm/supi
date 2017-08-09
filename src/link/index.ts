@@ -19,6 +19,7 @@ import removeOrphanPkgs from '../api/removeOrphanPkgs'
 import linkIndexedDir from '../fs/linkIndexedDir'
 import ncpCB = require('ncp')
 import thenify = require('thenify')
+import Rx = require('@reactivex/rxjs')
 
 const ncp = thenify(ncpCB)
 
@@ -68,6 +69,7 @@ export default async function (
       acc[tree.absolutePath] = tree
       return acc
     }, {})
+    .toPromise()
 
   const newShr = await updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
 
@@ -274,9 +276,8 @@ async function linkAllBins (
       await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
-          .map(child => linkPkgBins(path.join(dependency.modules, child.name), binPath))
-          .await()
-          .forEach(() => {})
+          .mergeMap(child => Rx.Observable.fromPromise(linkPkgBins(path.join(dependency.modules, child.name), binPath)))
+          .toPromise()
 
       // link also the bundled dependencies` bins
       if (dependency.hasBundledDependencies) {
@@ -305,9 +306,8 @@ async function linkAllModules (
         await childrenToLink$
           .map(childAbsolutePath => pkgMap[childAbsolutePath])
           .filter(child => child.installable)
-          .map(child => symlinkDependencyTo(child, dependency.modules))
-          .await()
-          .forEach(() => {})
+          .mergeMap(child => Rx.Observable.fromPromise(symlinkDependencyTo(child, dependency.modules)))
+          .toPromise()
       }))
   )
 }
