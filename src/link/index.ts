@@ -212,6 +212,7 @@ function linkNewPackages (
   let copy = false
   const prevPackages = privateShrinkwrap.packages || {}
   const parts = resolvedPkg$
+    .filter(resolvedPkg => resolvedPkg.node.installable)
     .partition(resolvedPkg => {
       // TODO: what if the registries differ?
       if (!opts.force && prevPackages[resolvedPkg.dependencyPath]) {
