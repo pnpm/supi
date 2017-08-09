@@ -511,15 +511,15 @@ async function installInContext (
     const linkedPkgsMapValues = R.values(result.linkedPkgsMap)
     await Promise.all(
       R.props<DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
-        .map(pkg => limitChild(async () => {
+        .map(dependencyNode => limitChild(async () => {
           try {
-            await postInstall(pkg.hardlinkedLocation, installLogger(pkg.id), {
+            await postInstall(dependencyNode.hardlinkedLocation, installLogger(dependencyNode.pkgId), {
               userAgent: opts.userAgent
             })
           } catch (err) {
-            if (!installCtx.nonOptionalPackageIds.has(pkg.id)) {
+            if (!installCtx.nonOptionalPackageIds.has(dependencyNode.pkgId)) {
               logger.warn({
-                message: `Skipping failed optional dependency ${pkg.id}`,
+                message: `Skipping failed optional dependency ${dependencyNode.pkgId}`,
                 err,
               })
               return

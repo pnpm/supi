@@ -70,7 +70,7 @@ export default async function (
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
 
-  let flatResolvedDeps$ =  pkgsToLink$.filter(dep => !opts.skipped.has(dep.id))
+  let flatResolvedDeps$ =  pkgsToLink$.filter(dep => !opts.skipped.has(dep.pkgId))
   if (opts.production) {
     flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.dev)
   }
@@ -95,7 +95,7 @@ export default async function (
 
   const shrPackages = opts.shrinkwrap.packages || {}
   await depShr$.forEach(depShr => {
-    shrPackages[depShr.dependencyPath] = depShr.dependencyShrinkwrap
+    shrPackages[depShr.dependencyPath] = depShr.snapshot
   })
   opts.shrinkwrap.packages = shrPackages
   const newShr = await pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
@@ -117,21 +117,21 @@ export default async function (
     }, [] as DependencyTreeNode[])
     .toPromise()
 
-  for (let pkg of flatDeps) {
-    const symlinkingResult = await symlinkDependencyTo(pkg, opts.baseNodeModules)
+  for (let dependencyNode of flatDeps) {
+    const symlinkingResult = await symlinkDependencyTo(dependencyNode, opts.baseNodeModules)
     if (!symlinkingResult.reused) {
       rootLogger.info({
         added: {
-          id: pkg.id,
-          name: pkg.name,
-          version: pkg.version,
-          dependencyType: pkg.dev && 'dev' || pkg.optional && 'optional' || 'prod',
+          id: dependencyNode.pkgId,
+          name: dependencyNode.name,
+          version: dependencyNode.version,
+          dependencyType: dependencyNode.dev && 'dev' || dependencyNode.optional && 'optional' || 'prod',
         },
       })
     }
     logStatus({
       status: 'installed',
-      pkgId: pkg.id,
+      pkgId: dependencyNode.pkgId,
     })
   }
 
@@ -200,7 +200,7 @@ function filterShrinkwrap (
 
 function linkNewPackages (
   privateShrinkwrap: Shrinkwrap,
-  nextPkgs$: Rx.Observable<DependencyShrinkwrapContainer>,
+  resolvedPkg$: Rx.Observable<DependencyShrinkwrapContainer>,
   opts: {
     force: boolean,
     global: boolean,
@@ -211,69 +211,69 @@ function linkNewPackages (
 ): Rx.Observable<string> {
   let copy = false
   const prevPackages = privateShrinkwrap.packages || {}
-  const linkedPkg$ = nextPkgs$
-    .mergeMap(nextPkg => {
+  const linkedPkg$ = resolvedPkg$
+    .mergeMap(resolvedPkg => {
       // TODO: what if the registries differ?
-      if (!opts.force && prevPackages[nextPkg.dependencyPath]) {
+      if (!opts.force && prevPackages[resolvedPkg.dependencyPath]) {
         // add subdependencies that have been updated
         // TODO: no need to relink everything. Can be relinked only what was changed
-        if (!(prevPackages[nextPkg.dependencyPath] &&
-          (!R.equals(prevPackages[nextPkg.dependencyPath].dependencies, nextPkg.dependencyShrinkwrap.dependencies) ||
-          !R.equals(prevPackages[nextPkg.dependencyPath].optionalDependencies, nextPkg.dependencyShrinkwrap.optionalDependencies)))) {
+        if (!(prevPackages[resolvedPkg.dependencyPath] &&
+          (!R.equals(prevPackages[resolvedPkg.dependencyPath].dependencies, resolvedPkg.snapshot.dependencies) ||
+          !R.equals(prevPackages[resolvedPkg.dependencyPath].optionalDependencies, resolvedPkg.snapshot.optionalDependencies)))) {
           return Rx.Observable.empty<DependencyShrinkwrapContainer>()
         }
       }
-      return Rx.Observable.of(nextPkg)
+      return Rx.Observable.of(resolvedPkg)
     })
-    .mergeMap(nextPkg => {
-      const activeDeps = nextPkg.dependencies.concat(opts.optional ? nextPkg.optionalDependencies : [])
+    .mergeMap(resolvedPkg => {
+      const activeDeps = resolvedPkg.dependencies.concat(opts.optional ? resolvedPkg.optionalDependencies : [])
       return Rx.Observable.fromPromise(
         Promise.all([
-          linkModules(nextPkg.dependencyTreeNode, activeDeps),
+          linkModules(resolvedPkg.node, activeDeps),
           (async () => {
             if (copy) {
-              await linkPkgToAbsPath(copyPkg, nextPkg.dependencyTreeNode, opts)
+              await linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts)
             }
             try {
-              await linkPkgToAbsPath(linkPkg, nextPkg.dependencyTreeNode, opts)
+              await linkPkgToAbsPath(linkPkg, resolvedPkg.node, opts)
             } catch (err) {
               if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
               copy = true
               logger.warn(err.message)
               logger.info('Falling back to copying packages from store')
-              await linkPkgToAbsPath(copyPkg, nextPkg.dependencyTreeNode, opts)
+              await linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts)
             }
           })()
         ])
       )
       .mergeMap(() => {
         // link also the bundled dependencies` bins
-        if (nextPkg.dependencyTreeNode.hasBundledDependencies) {
-          const binPath = path.join(nextPkg.dependencyTreeNode.hardlinkedLocation, 'node_modules', '.bin')
-          const bundledModules = path.join(nextPkg.dependencyTreeNode.hardlinkedLocation, 'node_modules')
+        if (resolvedPkg.node.hasBundledDependencies) {
+          const binPath = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules', '.bin')
+          const bundledModules = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules')
           return Rx.Observable.fromPromise(linkBins(bundledModules, binPath))
         }
         return Rx.Observable.of(undefined)
       })
       .last()
-      .mapTo({nextPkg, activeDeps})
+      .mapTo({resolvedPkg, activeDeps})
     })
     .shareReplay(Infinity)
 
   return linkedPkg$
     .mergeMap(value => {
-      if (!value.activeDeps.length) return Rx.Observable.of(value.nextPkg)
+      if (!value.activeDeps.length) return Rx.Observable.of(value.resolvedPkg)
       return Rx.Observable.from(value.activeDeps)
         .mergeMap(activeDep => {
-          return linkedPkg$.find(v => v.nextPkg.dependencyTreeNode.absolutePath === activeDep.absolutePath)
+          return linkedPkg$.find(v => v.resolvedPkg.node.absolutePath === activeDep.absolutePath)
         })
         .mergeMap(v => {
-          return Rx.Observable.fromPromise(_linkBins(value.nextPkg.dependencyTreeNode, v.nextPkg.dependencyTreeNode))
+          return Rx.Observable.fromPromise(_linkBins(value.resolvedPkg.node, v.resolvedPkg.node))
         })
         .last()
-        .mapTo(value.nextPkg)
+        .mapTo(value.resolvedPkg)
     })
-    .map(nextPkg => nextPkg.dependencyTreeNode.absolutePath)
+    .map(resolvedPkg => resolvedPkg.node.absolutePath)
 }
 
 const limitLinking = pLimit(16)

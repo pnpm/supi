@@ -14,28 +14,28 @@ import {Package} from '../types'
 
 export type DependencyShrinkwrapContainer = {
   dependencyPath: string,
-  dependencyShrinkwrap: DependencyShrinkwrap,
-  dependencyTreeNode: DependencyTreeNode,
+  snapshot: DependencyShrinkwrap,
+  node: DependencyTreeNode,
   dependencies: DependencyTreeNode[],
   optionalDependencies: DependencyTreeNode[],
 }
 
 export default function (
-  dep$: Rx.Observable<DependencyTreeNode>,
+  dependencyNode$: Rx.Observable<DependencyTreeNode>,
   shrinkwrap: Shrinkwrap,
   pkg: Package
 ): Rx.Observable<DependencyShrinkwrapContainer> {
   const packages = shrinkwrap.packages || {}
-  return dep$.mergeMap(dep => {
-    const dependencyPath = dp.relative(shrinkwrap.registry, dep.absolutePath)
-    return dep.children$
+  return dependencyNode$.mergeMap(dependencyNode => {
+    const dependencyPath = dp.relative(shrinkwrap.registry, dependencyNode.absolutePath)
+    return dependencyNode.children$
     .mergeMap(childAbsolutePath => {
-      return dep$
+      return dependencyNode$
         .filter(subdep => childAbsolutePath === subdep.absolutePath)
         .take(1)
     })
     .reduce((acc, subdep) => {
-      if (dep.optionalDependencies.has(subdep.name)) {
+      if (dependencyNode.optionalDependencies.has(subdep.name)) {
         acc.optionalDependencies.push(subdep)
       } else {
         acc.dependencies.push(subdep)
@@ -43,22 +43,22 @@ export default function (
       return acc
     }, {optionalDependencies: [] as DependencyTreeNode[], dependencies: [] as DependencyTreeNode[]})
     .map(result => ({
-      dependencyTreeNode: dep,
+      node: dependencyNode,
       dependencyPath,
       dependencies: result.dependencies,
       optionalDependencies: result.optionalDependencies,
-      dependencyShrinkwrap: toShrDependency({
-        dependencyAbsolutePath: dep.absolutePath,
-        id: dep.id,
+      snapshot: toShrDependency({
+        dependencyAbsolutePath: dependencyNode.absolutePath,
+        id: dependencyNode.pkgId,
         dependencyPath,
-        resolution: dep.resolution,
+        resolution: dependencyNode.resolution,
         updatedOptionalDeps: result.optionalDependencies,
         updatedDeps: result.dependencies,
         registry: shrinkwrap.registry,
         prevResolvedDeps: packages[dependencyPath] && packages[dependencyPath].dependencies || {},
         prevResolvedOptionalDeps: packages[dependencyPath] && packages[dependencyPath].optionalDependencies || {},
-        dev: dep.dev,
-        optional: dep.optional,
+        dev: dependencyNode.dev,
+        optional: dependencyNode.optional,
       })
     }))
   })

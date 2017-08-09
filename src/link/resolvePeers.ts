@@ -39,7 +39,7 @@ export type DependencyTreeNode = {
   absolutePath: string,
   dev: boolean,
   optional: boolean,
-  id: string,
+  pkgId: string,
   installable: boolean,
 }
 
@@ -63,7 +63,7 @@ type _DependencyTreeNode = {
   absolutePath: string,
   dev: boolean,
   optional: boolean,
-  id: string,
+  pkgId: string,
   installable: boolean,
 }
 
@@ -233,7 +233,7 @@ function resolvePeersOfNode (
           absolutePath,
           dev: !ctx.nonDevPackageIds.has(node.pkg.id),
           optional: !ctx.nonOptionalPackageIds.has(node.pkg.id),
-          id: node.pkg.id,
+          pkgId: node.pkg.id,
           installable: node.installable,
         }
         return {
