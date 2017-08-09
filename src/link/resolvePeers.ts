@@ -25,6 +25,7 @@ export type DependencyTreeNode = {
   // at this point the version is really needed only for logging
   version: string,
   hasBundledDependencies: boolean,
+  hasBins: boolean,
   path: string,
   modules: string,
   fetchingFiles: Promise<PackageContentInfo>,
@@ -48,6 +49,7 @@ type _DependencyTreeNode = {
   // at this point the version is really needed only for logging
   version: string,
   hasBundledDependencies: boolean,
+  hasBins: boolean,
   path: string,
   modules: string,
   fetchingFiles: Promise<PackageContentInfo>,
@@ -217,6 +219,7 @@ function resolvePeersOfNode (
           name: node.pkg.name,
           version: node.pkg.version,
           hasBundledDependencies: node.pkg.hasBundledDependencies,
+          hasBins: node.pkg.hasBins,
           fetchingFiles: node.pkg.fetchingFiles,
           resolution: node.pkg.resolution,
           path: pathToUnpacked,

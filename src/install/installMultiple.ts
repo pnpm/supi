@@ -48,6 +48,7 @@ export type InstalledPackage = {
   peerDependencies: Dependencies,
   optionalDependencies: Set<string>,
   hasBundledDependencies: boolean,
+  hasBins: boolean,
   installable: boolean,
   children$: Rx.Observable<string>,
 }
@@ -325,6 +326,7 @@ async function install (
       peerDependencies: pkg.peerDependencies || {},
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
+      hasBins: pkgHasBins(pkg),
       children$: children$
         .filter(child => child.depth === options.currentDepth + 1)
         .map(child => child.package.id),
@@ -343,6 +345,10 @@ async function install (
     depth: options.currentDepth,
     specRaw: spec.raw,
   })
+}
+
+function pkgHasBins (pkg: Package) {
+  return Boolean(pkg.bin || pkg.directories && pkg.directories.bin)
 }
 
 function normalizeRegistry (registry: string) {

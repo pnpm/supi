@@ -211,8 +211,8 @@ function linkNewPackages (
 ): Rx.Observable<string> {
   let copy = false
   const prevPackages = privateShrinkwrap.packages || {}
-  const linkedPkg$ = resolvedPkg$
-    .mergeMap(resolvedPkg => {
+  const parts = resolvedPkg$
+    .partition(resolvedPkg => {
       // TODO: what if the registries differ?
       if (!opts.force && prevPackages[resolvedPkg.dependencyPath]) {
         // add subdependencies that have been updated
@@ -220,58 +220,60 @@ function linkNewPackages (
         if (!(prevPackages[resolvedPkg.dependencyPath] &&
           (!R.equals(prevPackages[resolvedPkg.dependencyPath].dependencies, resolvedPkg.snapshot.dependencies) ||
           !R.equals(prevPackages[resolvedPkg.dependencyPath].optionalDependencies, resolvedPkg.snapshot.optionalDependencies)))) {
-          return Rx.Observable.empty<DependencyShrinkwrapContainer>()
+          return true
         }
       }
-      return Rx.Observable.of(resolvedPkg)
+      return false
     })
+
+  const upToDatePkg$ = parts[0].map(resolvedPkg => ({resolvedPkg}))
+  const pkgToLink$ = parts[1]
+
+  const linkedPkg$ = pkgToLink$
     .mergeMap(resolvedPkg => {
-      const activeDeps = resolvedPkg.dependencies.concat(opts.optional ? resolvedPkg.optionalDependencies : [])
-      return Rx.Observable.fromPromise(
-        Promise.all([
-          linkModules(resolvedPkg.node, activeDeps),
-          (async () => {
-            if (copy) {
-              await linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts)
-            }
-            try {
-              await linkPkgToAbsPath(linkPkg, resolvedPkg.node, opts)
-            } catch (err) {
-              if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
-              copy = true
-              logger.warn(err.message)
-              logger.info('Falling back to copying packages from store')
-              await linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts)
-            }
-          })()
-        ])
-      )
-      .mergeMap(() => {
-        // link also the bundled dependencies` bins
-        if (resolvedPkg.node.hasBundledDependencies) {
-          const binPath = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules', '.bin')
-          const bundledModules = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules')
-          return Rx.Observable.fromPromise(linkBins(bundledModules, binPath))
-        }
-        return Rx.Observable.of(undefined)
-      })
-      .last()
-      .mapTo({resolvedPkg, activeDeps})
+      const wantedDependencies = resolvedPkg.dependencies.concat(opts.optional ? resolvedPkg.optionalDependencies : [])
+      const linkModules$ = Rx.Observable.fromPromise(linkModules(resolvedPkg.node, wantedDependencies))
+      const linkPkgContent$ = copy
+        ? Rx.Observable.fromPromise(linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts))
+        : Rx.Observable.fromPromise(linkPkgToAbsPath(linkPkg, resolvedPkg.node, opts))
+          .catch(err => {
+            if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
+            copy = true
+            logger.warn(err.message)
+            logger.info('Falling back to copying packages from store')
+            return Rx.Observable.fromPromise(linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts))
+          })
+      return Rx.Observable.merge(linkModules$, linkPkgContent$)
+        .last()
+        .mergeMap(() => {
+          // link also the bundled dependencies` bins
+          if (resolvedPkg.node.hasBundledDependencies) {
+            const binPath = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules', '.bin')
+            const bundledModules = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules')
+            return Rx.Observable.fromPromise(linkBins(bundledModules, binPath))
+          }
+          return Rx.Observable.of(undefined)
+        })
+        .last()
+        .mapTo({
+          resolvedPkg,
+          dependenciesWithBins: wantedDependencies.filter(pkg => pkg.hasBins),
+        })
     })
     .shareReplay(Infinity)
 
   return linkedPkg$
-    .mergeMap(value => {
-      if (!value.activeDeps.length) return Rx.Observable.of(value.resolvedPkg)
-      return Rx.Observable.from(value.activeDeps)
-        .mergeMap(activeDep => {
-          return linkedPkg$.find(v => v.resolvedPkg.node.absolutePath === activeDep.absolutePath)
+    .mergeMap(linkedPkg => {
+      if (!linkedPkg.dependenciesWithBins.length) return Rx.Observable.of(linkedPkg.resolvedPkg)
+      return Rx.Observable.from(linkedPkg.dependenciesWithBins)
+        .mergeMap(depWithBins => {
+          return linkedPkg$.merge(upToDatePkg$).find(_ => _.resolvedPkg.node.absolutePath === depWithBins.absolutePath)
         })
-        .mergeMap(v => {
-          return Rx.Observable.fromPromise(_linkBins(value.resolvedPkg.node, v.resolvedPkg.node))
+        .mergeMap(_ => {
+          return Rx.Observable.fromPromise(_linkBins(linkedPkg.resolvedPkg.node, _.resolvedPkg.node))
         })
         .last()
-        .mapTo(value.resolvedPkg)
+        .mapTo(linkedPkg.resolvedPkg)
     })
     .map(resolvedPkg => resolvedPkg.node.absolutePath)
 }
