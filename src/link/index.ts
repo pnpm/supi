@@ -59,7 +59,7 @@ export default async function (
 }> {
   const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
-  const pkgsToLink$ = resolvePeers(
+  const resolvePeersResult = resolvePeers(
     tree,
     rootNodeIds,
     topPkgIds,
@@ -70,13 +70,8 @@ export default async function (
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
 
-  let flatResolvedDeps$ =  pkgsToLink$.filter(dep => !opts.skipped.has(dep.pkgId))
-  if (opts.production) {
-    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.dev)
-  }
-  if (!opts.optional) {
-    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.optional)
-  }
+  const pkgsToLink$ = resolvePeersResult.resolvedTree$
+  const rootNode$ = resolvePeersResult.rootNode$
 
   const filterOpts = {
     noDev: opts.production,
@@ -109,8 +104,14 @@ export default async function (
     bin: opts.bin,
   })
 
+  let flatResolvedDeps$ =  rootNode$.filter(dep => !opts.skipped.has(dep.pkgId))
+  if (opts.production) {
+    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.dev)
+  }
+  if (!opts.optional) {
+    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.optional)
+  }
   const flatDeps = await flatResolvedDeps$
-    .filter(pkg => pkg.depth === 0)
     .reduce((acc, dep) => {
       acc.push(dep)
       return acc

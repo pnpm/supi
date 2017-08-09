@@ -93,7 +93,10 @@ export default function (
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
-): Rx.Observable<DependencyTreeNode> {
+): {
+  resolvedTree$: Rx.Observable<DependencyTreeNode>,
+  rootNode$: Rx.Observable<DependencyTreeNode>,
+} {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
       parent.name,
@@ -113,35 +116,38 @@ export default function (
     nonOptionalPackageIds: opts.nonOptionalPackageIds,
   })
 
-  return result.resolvedTree$
-    .mergeMap(container => {
-      if (container.isRepeated) {
-        return Rx.Observable.empty<DependencyTreeNodeContainer>()
-      }
-      if (container.isCircular) {
-        return result.resolvedTree$
-          .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
-          .take(1)
-          .mergeMap(nextContainer => {
-            if (nextContainer.node.absolutePath === container.node.absolutePath) {
-              return Rx.Observable.of(nextContainer)
-            }
-            return Rx.Observable.from([nextContainer, container])
-          })
-      }
-      return Rx.Observable.of(container)
-    })
-    .map(container => Object.assign(container.node, {
-      children$: container.node.children$.merge(container.node.peerNodeIds.size
-          ? result.resolvedTree$
-            .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
-            .take(container.node.peerNodeIds.size)
-            .map(childNode => childNode.node.absolutePath)
-          : Rx.Observable.empty()
-        ),
-    }))
-    .distinct(v => v.absolutePath) /// this is bad.....
-    .shareReplay(Infinity)
+  return {
+    resolvedTree$: result.resolvedTree$
+      .mergeMap(container => {
+        if (container.isRepeated) {
+          return Rx.Observable.empty<DependencyTreeNodeContainer>()
+        }
+        if (container.isCircular) {
+          return result.resolvedTree$
+            .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
+            .take(1)
+            .mergeMap(nextContainer => {
+              if (nextContainer.node.absolutePath === container.node.absolutePath) {
+                return Rx.Observable.of(nextContainer)
+              }
+              return Rx.Observable.from([nextContainer, container])
+            })
+        }
+        return Rx.Observable.of(container)
+      })
+      .map(container => Object.assign(container.node, {
+        children$: container.node.children$.merge(container.node.peerNodeIds.size
+            ? result.resolvedTree$
+              .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
+              .take(container.node.peerNodeIds.size)
+              .map(childNode => childNode.node.absolutePath)
+            : Rx.Observable.empty()
+          ),
+      }))
+      .distinct(v => v.absolutePath) /// this is bad.....
+      .shareReplay(Infinity),
+    rootNode$: result.resolvedTree$.filter(node => node.depth === 0).map(container => container.node),
+  }
 }
 
 function resolvePeersOfNode (
