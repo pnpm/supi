@@ -12,9 +12,13 @@ import {Package, Dependencies} from '../types'
 import {Resolution, PackageContentInfo, Store} from 'package-store'
 import resolvePeers, {DependencyTreeNode, DependencyTreeNodeMap} from './resolvePeers'
 import logStatus from '../logging/logInstallStatus'
-import updateShrinkwrap from './updateShrinkwrap'
+import updateShrinkwrap, {DependencyShrinkwrapContainer} from './updateShrinkwrap'
 import * as dp from 'dependency-path'
-import {Shrinkwrap, DependencyShrinkwrap} from 'pnpm-shrinkwrap'
+import {
+  Shrinkwrap,
+  DependencyShrinkwrap,
+  prune as pruneShrinkwrap,
+} from 'pnpm-shrinkwrap'
 import removeOrphanPkgs from '../api/removeOrphanPkgs'
 import linkIndexedDir from '../fs/linkIndexedDir'
 import ncpCB = require('ncp')
@@ -55,7 +59,7 @@ export default async function (
 }> {
   const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
-  const pkgsToLink: DependencyTreeNodeMap = await resolvePeers(
+  const pkgsToLink$ = resolvePeers(
     tree,
     rootNodeIds,
     topPkgIds,
@@ -65,13 +69,36 @@ export default async function (
       nonDevPackageIds: opts.nonDevPackageIds,
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
-    .reduce((acc, tree) => {
-      acc[tree.absolutePath] = tree
-      return acc
-    }, {})
-    .toPromise()
 
-  const newShr = await updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
+  let flatResolvedDeps$ =  pkgsToLink$.filter(dep => !opts.skipped.has(dep.id))
+  if (opts.production) {
+    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.dev)
+  }
+  if (!opts.optional) {
+    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.optional)
+  }
+
+  const filterOpts = {
+    noDev: opts.production,
+    noOptional: !opts.optional,
+    skipped: opts.skipped,
+  }
+
+  const depShr$ = updateShrinkwrap(pkgsToLink$, opts.shrinkwrap, opts.pkg)
+
+  const newPkgResolvedIds$ = linkNewPackages(
+    filterShrinkwrap(opts.privateShrinkwrap, filterOpts),
+    depShr$,
+    opts,
+    opts.shrinkwrap.registry
+  )
+
+  const shrPackages = opts.shrinkwrap.packages || {}
+  await depShr$.forEach(depShr => {
+    shrPackages[depShr.dependencyPath] = depShr.dependencyShrinkwrap
+  })
+  opts.shrinkwrap.packages = shrPackages
+  const newShr = await pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
 
   await removeOrphanPkgs({
     oldShrinkwrap: opts.privateShrinkwrap,
@@ -82,27 +109,15 @@ export default async function (
     bin: opts.bin,
   })
 
-  let flatResolvedDeps =  R.values(pkgsToLink).filter(dep => !opts.skipped.has(dep.id))
-  if (opts.production) {
-    flatResolvedDeps = flatResolvedDeps.filter(dep => !dep.dev)
-  }
-  if (!opts.optional) {
-    flatResolvedDeps = flatResolvedDeps.filter(dep => !dep.optional)
-  }
+  const flatDeps = await flatResolvedDeps$
+    .filter(pkg => pkg.depth === 0)
+    .reduce((acc, dep) => {
+      acc.push(dep)
+      return acc
+    }, [] as DependencyTreeNode[])
+    .toPromise()
 
-  const filterOpts = {
-    noDev: opts.production,
-    noOptional: !opts.optional,
-    skipped: opts.skipped,
-  }
-  const newPkgResolvedIds = await linkNewPackages(
-    filterShrinkwrap(opts.privateShrinkwrap, filterOpts),
-    filterShrinkwrap(newShr, filterOpts),
-    pkgsToLink,
-    opts
-  )
-
-  for (let pkg of flatResolvedDeps.filter(pkg => pkg.depth === 0)) {
+  for (let pkg of flatDeps) {
     const symlinkingResult = await symlinkDependencyTo(pkg, opts.baseNodeModules)
     if (!symlinkingResult.reused) {
       rootLogger.info({
@@ -119,6 +134,18 @@ export default async function (
       pkgId: pkg.id,
     })
   }
+
+  const newPkgResolvedIds = await newPkgResolvedIds$.reduce((acc: string[], newPkgId) => {
+    acc.push(newPkgId)
+    return acc
+  }, [])
+  .toPromise()
+  const pkgsToLink = await pkgsToLink$.reduce((acc, pkgToLink) => {
+    acc[pkgToLink.absolutePath] = pkgToLink
+    return acc
+  }, {})
+  .toPromise()
+
   await linkBins(opts.baseNodeModules, opts.bin)
 
   let privateShrinkwrap: Shrinkwrap
@@ -171,144 +198,107 @@ function filterShrinkwrap (
   } as Shrinkwrap
 }
 
-async function linkNewPackages (
+function linkNewPackages (
   privateShrinkwrap: Shrinkwrap,
-  shrinkwrap: Shrinkwrap,
-  pkgsToLink: DependencyTreeNodeMap,
+  nextPkgs$: Rx.Observable<DependencyShrinkwrapContainer>,
   opts: {
     force: boolean,
     global: boolean,
     baseNodeModules: string,
     optional: boolean,
-  }
-): Promise<string[]> {
-  const nextPkgResolvedIds = R.keys(shrinkwrap.packages)
-  const prevPkgResolvedIds = R.keys(privateShrinkwrap.packages)
-
-  // TODO: what if the registries differ?
-  const newPkgResolvedIds = (
-      opts.force
-        ? nextPkgResolvedIds
-        : R.difference(nextPkgResolvedIds, prevPkgResolvedIds)
-    )
-    .map(shortId => dp.resolve(shrinkwrap.registry, shortId))
-    // when installing a new package, not all the nodes are analyzed
-    // just skip the ones that are in the lockfile but were not analyzed
-    .filter(resolvedId => pkgsToLink[resolvedId])
-
-  const newPkgs = R.props<DependencyTreeNode>(newPkgResolvedIds, pkgsToLink)
-
-  if (!opts.force && privateShrinkwrap.packages && shrinkwrap.packages) {
-    // add subdependencies that have been updated
-    // TODO: no need to relink everything. Can be relinked only what was changed
-    for (const shortId of nextPkgResolvedIds) {
-      if (privateShrinkwrap.packages[shortId] &&
-        (!R.equals(privateShrinkwrap.packages[shortId].dependencies, shrinkwrap.packages[shortId].dependencies) ||
-        !R.equals(privateShrinkwrap.packages[shortId].optionalDependencies, shrinkwrap.packages[shortId].optionalDependencies))) {
-        const resolvedId = dp.resolve(shrinkwrap.registry, shortId)
-        newPkgs.push(pkgsToLink[resolvedId])
+  },
+  registry: string
+): Rx.Observable<string> {
+  let copy = false
+  const prevPackages = privateShrinkwrap.packages || {}
+  return nextPkgs$.mergeMap(nextPkg => {
+    // TODO: what if the registries differ?
+    if (!opts.force && prevPackages[nextPkg.dependencyPath]) {
+      // add subdependencies that have been updated
+      // TODO: no need to relink everything. Can be relinked only what was changed
+      if (!(prevPackages[nextPkg.dependencyPath] &&
+        (!R.equals(prevPackages[nextPkg.dependencyPath].dependencies, nextPkg.dependencyShrinkwrap.dependencies) ||
+        !R.equals(prevPackages[nextPkg.dependencyPath].optionalDependencies, nextPkg.dependencyShrinkwrap.optionalDependencies)))) {
+        return Rx.Observable.empty<DependencyShrinkwrapContainer>()
       }
     }
-  }
-
-  if (!newPkgs.length) return []
-
-  logger.info(`Adding ${newPkgs.length} packages to node_modules`)
-
-  await Promise.all([
-    linkAllModules(newPkgs, pkgsToLink, {optional: opts.optional}),
-    (async () => {
-      try {
-        await linkAllPkgs(linkPkg, newPkgs, opts)
-      } catch (err) {
-        if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
-        logger.warn(err.message)
-        logger.info('Falling back to copying packages from store')
-        await linkAllPkgs(copyPkg, newPkgs, opts)
-      }
-    })()
-  ])
-
-  await linkAllBins(newPkgs, pkgsToLink, {optional: opts.optional})
-
-  return newPkgResolvedIds
+    return Rx.Observable.of(nextPkg)
+  })
+  .mergeMap(nextPkg => {
+    const activeDeps = nextPkg.dependencies.concat(opts.optional ? nextPkg.optionalDependencies : [])
+    return Rx.Observable.fromPromise(
+      Promise.all([
+        linkModules(nextPkg.dependencyTreeNode, activeDeps),
+        (async () => {
+          if (copy) {
+            await linkPkgToAbsPath(copyPkg, nextPkg.dependencyTreeNode, opts)
+          }
+          try {
+            await linkPkgToAbsPath(linkPkg, nextPkg.dependencyTreeNode, opts)
+          } catch (err) {
+            if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
+            copy = true
+            logger.warn(err.message)
+            logger.info('Falling back to copying packages from store')
+            await linkPkgToAbsPath(copyPkg, nextPkg.dependencyTreeNode, opts)
+          }
+        })()
+      ])
+      .then(() => _linkBins(nextPkg.dependencyTreeNode, activeDeps))
+    )
+    .mapTo(nextPkg)
+  })
+  .map(nextPkg => nextPkg.dependencyTreeNode.absolutePath)
 }
 
 const limitLinking = pLimit(16)
 
-async function linkAllPkgs (
+async function linkPkgToAbsPath (
   linkPkg: (fetchResult: PackageContentInfo, dependency: DependencyTreeNode, opts: {
     force: boolean,
     baseNodeModules: string,
   }) => Promise<void>,
-  alldeps: DependencyTreeNode[],
+  pkg: DependencyTreeNode,
   opts: {
     force: boolean,
     global: boolean,
     baseNodeModules: string,
   }
 ) {
-  return Promise.all(
-    alldeps.map(async pkg => {
-      const fetchResult = await pkg.fetchingFiles
+  const fetchResult = await pkg.fetchingFiles
 
-      if (pkg.independent) return
-      return limitLinking(() => linkPkg(fetchResult, pkg, opts))
-    })
-  )
+  if (pkg.independent) return
+  return limitLinking(() => linkPkg(fetchResult, pkg, opts))
 }
 
-async function linkAllBins (
-  pkgs: DependencyTreeNode[],
-  pkgMap: DependencyTreeNodeMap,
-  opts: {
-    optional: boolean,
-  }
+async function _linkBins (
+  dependency: DependencyTreeNode,
+  dependencies: DependencyTreeNode[]
 ) {
-  return Promise.all(
-    pkgs.map(dependency => limitLinking(async () => {
-      const binPath = path.join(dependency.hardlinkedLocation, 'node_modules', '.bin')
+  return limitLinking(async () => {
+    const binPath = path.join(dependency.hardlinkedLocation, 'node_modules', '.bin')
 
-      const childrenToLink$ = opts.optional
-          ? dependency.children$
-          : dependency.children$.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
+    await Promise.all(dependencies
+      .filter(child => child.installable)
+      .map(child => linkPkgBins(path.join(dependency.modules, child.name), binPath)))
 
-      await childrenToLink$
-          .map(childAbsolutePath => pkgMap[childAbsolutePath])
-          .filter(child => child.installable)
-          .mergeMap(child => Rx.Observable.fromPromise(linkPkgBins(path.join(dependency.modules, child.name), binPath)))
-          .toPromise()
-
-      // link also the bundled dependencies` bins
-      if (dependency.hasBundledDependencies) {
-        const bundledModules = path.join(dependency.hardlinkedLocation, 'node_modules')
-        await linkBins(bundledModules, binPath)
-      }
-    }))
-  )
+    // link also the bundled dependencies` bins
+    if (dependency.hasBundledDependencies) {
+      const bundledModules = path.join(dependency.hardlinkedLocation, 'node_modules')
+      await linkBins(bundledModules, binPath)
+    }
+  })
 }
 
-async function linkAllModules (
-  pkgs: DependencyTreeNode[],
-  pkgMap: DependencyTreeNodeMap,
-  opts: {
-    optional: boolean,
-  }
+async function linkModules (
+  pkg: DependencyTreeNode,
+  deps: DependencyTreeNode[]
 ) {
-  return Promise.all(
-    pkgs
-      .filter(dependency => !dependency.independent)
-      .map(dependency => limitLinking(async () => {
-        const childrenToLink$ = opts.optional
-          ? dependency.children$
-          : dependency.children$.filter(child => !dependency.optionalDependencies.has(pkgMap[child].name))
+  if (pkg.independent) return
 
-        await childrenToLink$
-          .map(childAbsolutePath => pkgMap[childAbsolutePath])
-          .filter(child => child.installable)
-          .mergeMap(child => Rx.Observable.fromPromise(symlinkDependencyTo(child, dependency.modules)))
-          .toPromise()
-      }))
+  return limitLinking(() => Promise.all(deps
+    .filter(child => child.installable)
+    .map(child => symlinkDependencyTo(child, pkg.modules)))
   )
 }
 

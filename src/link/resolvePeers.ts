@@ -138,6 +138,8 @@ export default function (
           : Rx.Observable.empty()
         ),
     }))
+    .distinct(v => v.absolutePath) /// this is bad.....
+    .shareReplay(Infinity)
 }
 
 function resolvePeersOfNode (
