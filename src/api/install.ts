@@ -396,10 +396,7 @@ async function installInContext (
   const rootPackageRequests = await packageRequests$
     .filter(request => request.depth === 0)
     .take(nonLinkedPkgs.length)
-    .reduce((acc: PackageRequest[], packageRequest: PackageRequest) => {
-      acc.push(packageRequest)
-      return acc
-    }, [])
+    .toArray()
     .toPromise()
 
   installCtx.tree = {}
@@ -424,7 +421,7 @@ async function installInContext (
     complete: () => stageLogger.debug('resolution_done'),
   })
 
-  const pkgByRawSpec = await rootPackageRequests
+  const pkgByRawSpec = rootPackageRequests
     .reduce((acc: {}, packageRequest: PackageRequest) => {
       acc[packageRequest.specRaw] = packageRequest.package
       return acc

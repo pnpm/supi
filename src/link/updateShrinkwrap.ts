@@ -29,11 +29,7 @@ export default function (
   return dependencyNode$.mergeMap(dependencyNode => {
     const dependencyPath = dp.relative(shrinkwrap.registry, dependencyNode.absolutePath)
     return dependencyNode.children$
-    .mergeMap(childAbsolutePath => {
-      return dependencyNode$
-        .filter(subdep => childAbsolutePath === subdep.absolutePath)
-        .take(1)
-    })
+    .mergeMap(childAbsolutePath => dependencyNode$.find(subdep => childAbsolutePath === subdep.absolutePath))
     .reduce((acc, subdep) => {
       if (dependencyNode.optionalDependencies.has(subdep.name)) {
         acc.optionalDependencies.push(subdep)

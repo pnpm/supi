@@ -167,11 +167,7 @@ function resolvePeersOfNode (
 } {
   const node = ctx.tree[nodeId]
 
-  const children$ = node.children$
-    .reduce((acc: string[], child: string) => {
-      acc.push(child)
-      return acc
-    }, [])
+  const children$ = node.children$.toArray()
 
   const childrenSet$ = children$.map(children => new Set(children))
 
@@ -191,17 +187,9 @@ function resolvePeersOfNode (
   const allResolvedPeers$ = unknownResolvedPeersOfChildren$.merge(resolvedPeers$)
 
   const resolvedNode$ = Rx.Observable.combineLatest(
-    allResolvedPeers$
-      .reduce((acc: Set<string>, peer: string) => {
-        acc.add(peer)
-        return acc
-      }, new Set()
-    ),
+    allResolvedPeers$.toArray().map(arrayToSet),
     childrenSet$,
-    resolvedPeers$.reduce((acc: Set<string>, peer: string) => {
-      acc.add(peer)
-      return acc
-    }, new Set<string>()),
+    resolvedPeers$.toArray().map(arrayToSet),
     (allResolvedPeers, childrenSet, resolvedPeers) => {
       let modules: string
       let absolutePath: string
@@ -266,6 +254,10 @@ function resolvePeersOfNode (
     allResolvedPeers$: allResolvedPeers$,
     resolvedTree$: resolvedNode$.merge(result.resolvedTree$),
   }
+}
+
+function arrayToSet<T> (arr: T[]): Set<T> {
+  return new Set(arr)
 }
 
 function addMany<T>(a: Set<T>, b: Set<T>) {

@@ -136,16 +136,14 @@ export default async function (
     })
   }
 
-  const newPkgResolvedIds = await newPkgResolvedIds$.reduce((acc: string[], newPkgId) => {
-    acc.push(newPkgId)
-    return acc
-  }, [])
-  .toPromise()
-  const pkgsToLink = await pkgsToLink$.reduce((acc, pkgToLink) => {
-    acc[pkgToLink.absolutePath] = pkgToLink
-    return acc
-  }, {})
-  .toPromise()
+  const newPkgResolvedIds = await newPkgResolvedIds$
+    .toArray()
+    .toPromise()
+  const pkgsToLink = await pkgsToLink$
+    .map(pkgToLink => [pkgToLink.absolutePath, pkgToLink])
+    .toArray()
+    .map(R.fromPairs)
+    .toPromise()
 
   await linkBins(opts.baseNodeModules, opts.bin)
 
