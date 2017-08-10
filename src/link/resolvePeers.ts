@@ -56,7 +56,7 @@ type _DependencyTreeNode = {
   resolution: Resolution,
   hardlinkedLocation: string,
   children$: Rx.Observable<string>,
-  peerNodeIds: Set<string>,
+  peerNodeIds$: Rx.Observable<string>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
   independent: boolean,
@@ -136,12 +136,11 @@ export default function (
         return Rx.Observable.of(container)
       })
       .map(container => Object.assign(container.node, {
-        children$: container.node.children$.merge(container.node.peerNodeIds.size
-            ? result.resolvedTree$
-              .filter(childNode => container.node.peerNodeIds.has(childNode.nodeId))
-              .take(container.node.peerNodeIds.size)
-              .map(childNode => childNode.node.absolutePath)
-            : Rx.Observable.empty()
+        children$: container.node.children$.merge(
+          container.node.peerNodeIds$.mergeMap(peerNodeId =>
+            result.resolvedTree$
+              .find(childNode => childNode.nodeId === peerNodeId)
+              .map(childNode => childNode.node.absolutePath))
           ),
       }))
       .distinct(v => v.absolutePath) /// this is bad.....
@@ -187,25 +186,22 @@ function resolvePeersOfNode (
 
   const externalPeer$ = childsExternalPeer$.merge(ownExternalPeer$)
 
-  const resolvedNode$ = Rx.Observable.combineLatest(
-    externalPeer$.toArray().map(arrayToSet),
-    childrenSet$,
-    ownExternalPeer$.toArray().map(arrayToSet),
-    (externalPeers, childrenSet, ownExternalPeers) => {
+  const resolvedNode$ = externalPeer$.toArray()
+    .map(externalPeers => {
       let modules: string
       let absolutePath: string
       const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
-      if (!externalPeers.size) {
+      if (!externalPeers.length) {
         modules = path.join(localLocation, 'node_modules')
         absolutePath = node.pkg.id
       } else {
-        const peersFolder = createPeersFolderName(R.props<TreeNode>(Array.from(externalPeers), ctx.tree).map(node => node.pkg))
+        const peersFolder = createPeersFolderName(R.props<TreeNode>(externalPeers, ctx.tree).map(node => node.pkg))
         modules = path.join(localLocation, peersFolder, 'node_modules')
         absolutePath = `${node.pkg.id}/${peersFolder}`
       }
 
       if (!ctx.resolvedTree[absolutePath] || ctx.resolvedTree[absolutePath].depth > node.depth) {
-        const independent = ctx.independentLeaves && !childrenSet.size && R.isEmpty(node.pkg.peerDependencies)
+        const independent = ctx.independentLeaves && !node.pkg.childrenCount && R.isEmpty(node.pkg.peerDependencies)
         const pathToUnpacked = path.join(node.pkg.path, 'node_modules', node.pkg.name)
         const hardlinkedLocation = !independent
           ? path.join(modules, node.pkg.name)
@@ -224,9 +220,11 @@ function resolvePeersOfNode (
           optionalDependencies: node.pkg.optionalDependencies,
           children$: result.resolvedTree$
             .filter(childNode => childNode.depth === node.depth + 1)
-            .take(childrenSet.size)
+            .take(node.pkg.childrenCount)
             .map(childNode => childNode.node.absolutePath),
-          peerNodeIds: difference(ownExternalPeers, childrenSet),
+          peerNodeIds$: childrenSet$
+            .last()
+            .mergeMap(childrenSet => ownExternalPeer$.filter(peer => !childrenSet.has(peer))),
           depth: node.depth,
           absolutePath,
           dev: !ctx.nonDevPackageIds.has(node.pkg.id),

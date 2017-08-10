@@ -51,6 +51,7 @@ export type InstalledPackage = {
   hasBins: boolean,
   installable: boolean,
   children$: Rx.Observable<string>,
+  childrenCount: number,
 }
 
 export default function installMultiple (
@@ -327,6 +328,7 @@ async function install (
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
       hasBins: pkgHasBins(pkg),
+      childrenCount: installDepsResult.directChildrenCount,
       children$: installDepsResult.children$
         .filter(child => child.depth === options.currentDepth + 1)
         .take(installDepsResult.directChildrenCount)
