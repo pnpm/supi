@@ -296,7 +296,7 @@ async function install (
       ctx.skipped.add(fetchedPkg.id)
     }
 
-    const children$ = installDependencies(
+    const installDepsResult = installDependencies(
       pkg,
       spec,
       ctx,
@@ -327,13 +327,14 @@ async function install (
       optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
       hasBins: pkgHasBins(pkg),
-      children$: children$
+      children$: installDepsResult.children$
         .filter(child => child.depth === options.currentDepth + 1)
+        .take(installDepsResult.directChildrenCount)
         .map(child => child.package.id),
       installable: currentIsInstallable,
     }
 
-    return children$.startWith({
+    return installDepsResult.children$.startWith({
       package: ctx.installs[fetchedPkg.id],
       depth: options.currentDepth,
       specRaw: spec.raw,
@@ -369,7 +370,10 @@ function installDependencies (
     parentIsInstallable: boolean,
     update: boolean,
   }
-): Rx.Observable<PackageRequest> {
+): {
+  children$: Rx.Observable<PackageRequest>,
+  directChildrenCount: number,
+} {
   const bundledDeps = pkg.bundleDependencies || pkg.bundledDependencies || []
   const filterDeps = getNotBundledDeps.bind(null, bundledDeps)
   const deps = depsToSpecs(
@@ -381,7 +385,10 @@ function installDependencies (
     }
   )
 
-  return installMultiple(ctx, deps, opts)
+  return {
+    children$: installMultiple(ctx, deps, opts),
+    directChildrenCount: deps.length,
+  }
 }
 
 function getNotBundledDeps (bundledDeps: string[], deps: Dependencies) {
