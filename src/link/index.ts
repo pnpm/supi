@@ -10,7 +10,7 @@ import {InstalledPackages, TreeNode} from '../api/install'
 import linkBins, {linkPkgBins} from './linkBins'
 import {Package, Dependencies} from '../types'
 import {Resolution, PackageContentInfo, Store} from 'package-store'
-import resolvePeers, {DependencyTreeNode, DependencyTreeNodeMap} from './resolvePeers'
+import resolvePeers, {ResolvedNode, Map} from './resolvePeers'
 import logStatus from '../logging/logInstallStatus'
 import updateShrinkwrap, {DependencyShrinkwrapContainer} from './updateShrinkwrap'
 import * as dp from 'dependency-path'
@@ -52,10 +52,10 @@ export default async function (
     nonOptionalPackageIds: Set<string>,
   }
 ): Promise<{
-  linkedPkgsMap: DependencyTreeNodeMap,
+  resolvedNodesMap: Map<ResolvedNode>,
   shrinkwrap: Shrinkwrap,
   privateShrinkwrap: Shrinkwrap,
-  newPkgResolvedIds: string[],
+  updatedPkgsAbsolutePaths: string[],
 }> {
   const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
@@ -70,8 +70,10 @@ export default async function (
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
 
-  const pkgsToLink$ = resolvePeersResult.resolvedTree$
-  const rootNode$ = resolvePeersResult.rootNode$
+  const resolvedNode$ = resolvePeersResult.resolvedNode$
+  const rootResolvedNode$ = resolvePeersResult.rootResolvedNode$
+
+  const depShr$ = updateShrinkwrap(resolvedNode$, opts.shrinkwrap, opts.pkg)
 
   const filterOpts = {
     noDev: opts.production,
@@ -79,9 +81,7 @@ export default async function (
     skipped: opts.skipped,
   }
 
-  const depShr$ = updateShrinkwrap(pkgsToLink$, opts.shrinkwrap, opts.pkg)
-
-  const newPkgResolvedIds$ = linkNewPackages(
+  const updatedPkgsAbsolutePaths$ = linkNewPackages(
     filterShrinkwrap(opts.privateShrinkwrap, filterOpts),
     depShr$,
     opts,
@@ -104,43 +104,40 @@ export default async function (
     bin: opts.bin,
   })
 
-  let flatResolvedDeps$ =  rootNode$.filter(dep => !opts.skipped.has(dep.pkgId))
+  let wantedRootResolvedNode$ = rootResolvedNode$.filter(dep => !opts.skipped.has(dep.pkgId))
   if (opts.production) {
-    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.dev)
+    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.dev)
   }
   if (!opts.optional) {
-    flatResolvedDeps$ = flatResolvedDeps$.filter(dep => !dep.optional)
+    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.optional)
   }
-  const flatDeps = await flatResolvedDeps$
-    .reduce((acc, dep) => {
-      acc.push(dep)
-      return acc
-    }, [] as DependencyTreeNode[])
+  const wantedRootResolvedNodes = await wantedRootResolvedNode$
+    .toArray()
     .toPromise()
 
-  for (let dependencyNode of flatDeps) {
-    const symlinkingResult = await symlinkDependencyTo(dependencyNode, opts.baseNodeModules)
+  for (let resolvedNode of wantedRootResolvedNodes) {
+    const symlinkingResult = await symlinkDependencyTo(resolvedNode, opts.baseNodeModules)
     if (!symlinkingResult.reused) {
       rootLogger.info({
         added: {
-          id: dependencyNode.pkgId,
-          name: dependencyNode.name,
-          version: dependencyNode.version,
-          dependencyType: dependencyNode.dev && 'dev' || dependencyNode.optional && 'optional' || 'prod',
+          id: resolvedNode.pkgId,
+          name: resolvedNode.name,
+          version: resolvedNode.version,
+          dependencyType: resolvedNode.dev && 'dev' || resolvedNode.optional && 'optional' || 'prod',
         },
       })
     }
     logStatus({
       status: 'installed',
-      pkgId: dependencyNode.pkgId,
+      pkgId: resolvedNode.pkgId,
     })
   }
 
-  const newPkgResolvedIds = await newPkgResolvedIds$
+  const updatedPkgsAbsolutePaths = await updatedPkgsAbsolutePaths$
     .toArray()
     .toPromise()
-  const pkgsToLink = await pkgsToLink$
-    .map(pkgToLink => [pkgToLink.absolutePath, pkgToLink])
+  const resolvedNodesMap = await resolvedNode$
+    .map(resolvedNode => [resolvedNode.absolutePath, resolvedNode])
     .toArray()
     .map(R.fromPairs)
     .toPromise()
@@ -153,7 +150,7 @@ export default async function (
     if (newShr.packages) {
       for (const shortId in newShr.packages) {
         const resolvedId = dp.resolve(newShr.registry, shortId)
-        if (pkgsToLink[resolvedId]) {
+        if (resolvedNodesMap[resolvedId]) {
           packages[shortId] = newShr.packages[shortId]
         }
       }
@@ -166,10 +163,10 @@ export default async function (
   }
 
   return {
-    linkedPkgsMap: pkgsToLink,
+    resolvedNodesMap,
     shrinkwrap: newShr,
     privateShrinkwrap,
-    newPkgResolvedIds,
+    updatedPkgsAbsolutePaths,
   }
 }
 
@@ -281,11 +278,11 @@ function linkNewPackages (
 const limitLinking = pLimit(16)
 
 async function linkPkgToAbsPath (
-  linkPkg: (fetchResult: PackageContentInfo, dependency: DependencyTreeNode, opts: {
+  linkPkg: (fetchResult: PackageContentInfo, dependency: ResolvedNode, opts: {
     force: boolean,
     baseNodeModules: string,
   }) => Promise<void>,
-  pkg: DependencyTreeNode,
+  pkg: ResolvedNode,
   opts: {
     force: boolean,
     global: boolean,
@@ -299,8 +296,8 @@ async function linkPkgToAbsPath (
 }
 
 function _linkBins (
-  pkg: DependencyTreeNode,
-  dependency: DependencyTreeNode
+  pkg: ResolvedNode,
+  dependency: ResolvedNode
 ) {
   return limitLinking(async () => {
     const binPath = path.join(pkg.hardlinkedLocation, 'node_modules', '.bin')
@@ -312,8 +309,8 @@ function _linkBins (
 }
 
 async function linkModules (
-  pkg: DependencyTreeNode,
-  deps: DependencyTreeNode[]
+  pkg: ResolvedNode,
+  deps: ResolvedNode[]
 ) {
   if (pkg.independent) return
 
@@ -325,7 +322,7 @@ async function linkModules (
 
 async function linkPkg (
   fetchResult: PackageContentInfo,
-  dependency: DependencyTreeNode,
+  dependency: ResolvedNode,
   opts: {
     force: boolean,
     baseNodeModules: string,
@@ -340,7 +337,7 @@ async function linkPkg (
 
 async function copyPkg (
   fetchResult: PackageContentInfo,
-  dependency: DependencyTreeNode,
+  dependency: ResolvedNode,
   opts: {
     force: boolean,
     baseNodeModules: string,
@@ -354,7 +351,7 @@ async function copyPkg (
   }
 }
 
-async function pkgLinkedToStore (pkgJsonPath: string, dependency: DependencyTreeNode) {
+async function pkgLinkedToStore (pkgJsonPath: string, dependency: ResolvedNode) {
   const pkgJsonPathInStore = path.join(dependency.path, 'package.json')
   if (await isSameFile(pkgJsonPath, pkgJsonPathInStore)) return true
   logger.info(`Relinking ${dependency.hardlinkedLocation} from the store`)
@@ -366,7 +363,7 @@ async function isSameFile (file1: string, file2: string) {
   return stats[0].ino === stats[1].ino
 }
 
-function symlinkDependencyTo (dependency: DependencyTreeNode, dest: string) {
+function symlinkDependencyTo (dependency: ResolvedNode, dest: string) {
   dest = path.join(dest, dependency.name)
   return symlinkDir(dependency.hardlinkedLocation, dest)
 }

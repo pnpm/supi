@@ -12,15 +12,18 @@ import {InstalledPackage} from '../install/installMultiple'
 import {TreeNode, TreeNodeMap} from '../api/install'
 import Rx = require('@reactivex/rxjs')
 
-type DependencyTreeNodeContainer = {
+type PartiallyResolvedNodeContainer = {
+  // a node ID is the join of the package's keypath with a colon
+  // E.g., a subdeps node ID which parent is `foo` will be
+  // registry.npmjs.org/foo/1.0.0:registry.npmjs.org/bar/1.0.0
   nodeId: string,
-  node: _DependencyTreeNode,
+  node: PartiallyResolvedNode,
   depth: number,
   isRepeated: boolean,
   isCircular: boolean,
 }
 
-export type DependencyTreeNode = {
+export type ResolvedNode = {
   name: string,
   // at this point the version is really needed only for logging
   version: string,
@@ -44,40 +47,13 @@ export type DependencyTreeNode = {
   installable: boolean,
 }
 
-type _DependencyTreeNode = {
-  name: string,
-  // at this point the version is really needed only for logging
-  version: string,
-  hasBundledDependencies: boolean,
-  hasBins: boolean,
-  path: string,
-  modules: string,
-  fetchingFiles: Promise<PackageContentInfo>,
-  resolution: Resolution,
-  hardlinkedLocation: string,
-  children$: Rx.Observable<string>,
+// All the direct children are resolved but the peer dependencies are not
+type PartiallyResolvedNode = ResolvedNode & {
   peerNodeIds$: Rx.Observable<string>,
-  // an independent package is a package that
-  // has neither regular nor peer dependencies
-  independent: boolean,
-  optionalDependencies: Set<string>,
-  depth: number,
-  absolutePath: string,
-  dev: boolean,
-  optional: boolean,
-  pkgId: string,
-  installable: boolean,
 }
 
-type _DependencyTreeNodeMap = {
-  [nodeId: string]: _DependencyTreeNode
-}
-
-export type DependencyTreeNodeMap = {
-  // a node ID is the join of the package's keypath with a colon
-  // E.g., a subdeps node ID which parent is `foo` will be
-  // registry.npmjs.org/foo/1.0.0:registry.npmjs.org/bar/1.0.0
-  [nodeId: string]: DependencyTreeNode
+export type Map<T> = {
+  [nodeId: string]: T
 }
 
 export default function (
@@ -94,8 +70,8 @@ export default function (
     nonOptionalPackageIds: Set<string>,
   }
 ): {
-  resolvedTree$: Rx.Observable<DependencyTreeNode>,
-  rootNode$: Rx.Observable<DependencyTreeNode>,
+  resolvedNode$: Rx.Observable<ResolvedNode>,
+  rootResolvedNode$: Rx.Observable<ResolvedNode>,
 } {
   const pkgsByName = R.fromPairs(
     topParents.map((parent: {name: string, version: string}): R.KeyValuePair<string, ParentRef> => [
@@ -109,7 +85,7 @@ export default function (
 
   const result = resolvePeersOfChildren(Rx.Observable.of(new Set(rootNodeIds)), pkgsByName, {
     tree,
-    resolvedTree: {},
+    partiallyResolvedNodeMap: {},
     independentLeaves,
     nodeModules,
     nonDevPackageIds: opts.nonDevPackageIds,
@@ -117,13 +93,13 @@ export default function (
   })
 
   return {
-    resolvedTree$: result.resolvedTree$
+    resolvedNode$: result.partiallyResolvedNodeContainer$
       .mergeMap(container => {
         if (container.isRepeated) {
-          return Rx.Observable.empty<DependencyTreeNodeContainer>()
+          return Rx.Observable.empty<PartiallyResolvedNodeContainer>()
         }
         if (container.isCircular) {
-          return result.resolvedTree$
+          return result.partiallyResolvedNodeContainer$
             .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
             .take(1)
             .mergeMap(nextContainer => {
@@ -138,14 +114,14 @@ export default function (
       .map(container => Object.assign(container.node, {
         children$: container.node.children$.merge(
           container.node.peerNodeIds$.mergeMap(peerNodeId =>
-            result.resolvedTree$
+            result.partiallyResolvedNodeContainer$
               .find(childNode => childNode.nodeId === peerNodeId)
               .map(childNode => childNode.node.absolutePath))
           ),
       }))
       .distinct(v => v.absolutePath) /// this is bad.....
       .shareReplay(Infinity),
-    rootNode$: result.resolvedTree$.filter(node => node.depth === 0).map(container => container.node),
+    rootResolvedNode$: result.partiallyResolvedNodeContainer$.filter(node => node.depth === 0).map(container => container.node),
   }
 }
 
@@ -154,7 +130,7 @@ function resolvePeersOfNode (
   parentPkgs: ParentRefs,
   ctx: {
     tree: TreeNodeMap,
-    resolvedTree: _DependencyTreeNodeMap,
+    partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
     nonDevPackageIds: Set<string>,
@@ -162,7 +138,7 @@ function resolvePeersOfNode (
   }
 ): {
   externalPeer$: Rx.Observable<string>,
-  resolvedTree$: Rx.Observable<DependencyTreeNodeContainer>,
+  partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const node = ctx.tree[nodeId]
 
@@ -188,18 +164,18 @@ function resolvePeersOfNode (
 
   const resolvedNode$ = externalPeer$
     .toArray()
-    .map(externalPeers => resolveNode(ctx, node, externalPeers, ownExternalPeer$, result.resolvedTree$, childrenSet$))
+    .map(externalPeers => resolveNode(ctx, node, externalPeers, ownExternalPeer$, result.partiallyResolvedNodeContainer$, childrenSet$))
 
   return {
     externalPeer$: externalPeer$,
-    resolvedTree$: resolvedNode$.merge(result.resolvedTree$),
+    partiallyResolvedNodeContainer$: resolvedNode$.merge(result.partiallyResolvedNodeContainer$),
   }
 }
 
 function resolveNode (
   ctx: {
     tree: TreeNodeMap,
-    resolvedTree: _DependencyTreeNodeMap,
+    partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
     nonDevPackageIds: Set<string>,
@@ -208,7 +184,7 @@ function resolveNode (
   node: TreeNode,
   externalPeers: string[],
   ownExternalPeer$: Rx.Observable<string>,
-  resolvedTree$: Rx.Observable<DependencyTreeNodeContainer>,
+  partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
   childrenSet$: Rx.Observable<Set<string>>
 ) {
   let modules: string
@@ -223,10 +199,10 @@ function resolveNode (
     absolutePath = `${node.pkg.id}/${peersFolder}`
   }
 
-  if (ctx.resolvedTree[absolutePath] && ctx.resolvedTree[absolutePath].depth <= node.depth) {
+  if (ctx.partiallyResolvedNodeMap[absolutePath] && ctx.partiallyResolvedNodeMap[absolutePath].depth <= node.depth) {
     return {
       depth: node.depth,
-      node: ctx.resolvedTree[absolutePath],
+      node: ctx.partiallyResolvedNodeMap[absolutePath],
       nodeId: node.nodeId,
       isRepeated: true,
       isCircular: node.isCircular,
@@ -238,7 +214,7 @@ function resolveNode (
   const hardlinkedLocation = !independent
     ? path.join(modules, node.pkg.name)
     : pathToUnpacked
-  ctx.resolvedTree[absolutePath] = {
+  ctx.partiallyResolvedNodeMap[absolutePath] = {
     name: node.pkg.name,
     version: node.pkg.version,
     hasBundledDependencies: node.pkg.hasBundledDependencies,
@@ -250,7 +226,7 @@ function resolveNode (
     hardlinkedLocation,
     independent,
     optionalDependencies: node.pkg.optionalDependencies,
-    children$: resolvedTree$
+    children$: partiallyResolvedNodeContainer$
       .filter(childNode => childNode.depth === node.depth + 1)
       .take(node.pkg.childrenCount)
       .map(childNode => childNode.node.absolutePath),
@@ -264,7 +240,7 @@ function resolveNode (
   }
   return {
     depth: node.depth,
-    node: ctx.resolvedTree[absolutePath],
+    node: ctx.partiallyResolvedNodeMap[absolutePath],
     nodeId: node.nodeId,
     isRepeated: false,
     isCircular: node.isCircular,
@@ -280,7 +256,7 @@ function resolvePeersOfChildren (
   parentParentPkgs: ParentRefs,
   ctx: {
     tree: {[nodeId: string]: TreeNode},
-    resolvedTree: _DependencyTreeNodeMap,
+    partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
     nonDevPackageIds: Set<string>,
@@ -288,7 +264,7 @@ function resolvePeersOfChildren (
   }
 ): {
   externalPeer$: Rx.Observable<string>,
-  resolvedTree$: Rx.Observable<DependencyTreeNodeContainer>,
+  partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const result = children$.mergeMap(children => {
     const childrenArray = Array.from(children)
@@ -300,13 +276,13 @@ function resolvePeersOfChildren (
       .map(child => resolvePeersOfNode(child, parentPkgs, ctx))
       .map(result => ({
         externalPeer$: result.externalPeer$.filter(peer => !children.has(peer)),
-        resolvedTree$: result.resolvedTree$,
+        partiallyResolvedNodeContainer$: result.partiallyResolvedNodeContainer$,
       }))
   })
 
   return {
     externalPeer$: result.mergeMap(result => result.externalPeer$),
-    resolvedTree$: result.mergeMap(result => result.resolvedTree$).shareReplay(Infinity),
+    partiallyResolvedNodeContainer$: result.mergeMap(result => result.partiallyResolvedNodeContainer$).shareReplay(Infinity),
   }
 }
 

@@ -37,7 +37,7 @@ import {
 import mkdirp = require('mkdirp-promise')
 import createMemoize, {MemoizedFunc} from '../memoize'
 import {Package} from '../types'
-import {DependencyTreeNode} from '../link/resolvePeers'
+import {ResolvedNode} from '../link/resolvePeers'
 import depsToSpecs, {similarDepsToSpecs} from '../depsToSpecs'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
 import {
@@ -503,20 +503,19 @@ async function installInContext (
   ])
 
   // postinstall hooks
-  if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length)) {
+  if (!(opts.ignoreScripts || !result.updatedPkgsAbsolutePaths || !result.updatedPkgsAbsolutePaths.length)) {
     const limitChild = pLimit(opts.childConcurrency)
-    const linkedPkgsMapValues = R.values(result.linkedPkgsMap)
     await Promise.all(
-      R.props<DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
-        .map(dependencyNode => limitChild(async () => {
+      R.props<ResolvedNode>(result.updatedPkgsAbsolutePaths, result.resolvedNodesMap)
+        .map(resolvedNode => limitChild(async () => {
           try {
-            await postInstall(dependencyNode.hardlinkedLocation, installLogger(dependencyNode.pkgId), {
+            await postInstall(resolvedNode.hardlinkedLocation, installLogger(resolvedNode.pkgId), {
               userAgent: opts.userAgent
             })
           } catch (err) {
-            if (!installCtx.nonOptionalPackageIds.has(dependencyNode.pkgId)) {
+            if (!installCtx.nonOptionalPackageIds.has(resolvedNode.pkgId)) {
               logger.warn({
-                message: `Skipping failed optional dependency ${dependencyNode.pkgId}`,
+                message: `Skipping failed optional dependency ${resolvedNode.pkgId}`,
                 err,
               })
               return

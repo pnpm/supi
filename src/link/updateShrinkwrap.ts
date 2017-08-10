@@ -6,7 +6,7 @@ import {
   ShrinkwrapResolution,
   ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
-import {DependencyTreeNodeMap, DependencyTreeNode} from './resolvePeers'
+import {ResolvedNode} from './resolvePeers'
 import {Resolution} from 'package-store'
 import R = require('ramda')
 import Rx = require('@reactivex/rxjs')
@@ -15,46 +15,46 @@ import {Package} from '../types'
 export type DependencyShrinkwrapContainer = {
   dependencyPath: string,
   snapshot: DependencyShrinkwrap,
-  node: DependencyTreeNode,
-  dependencies: DependencyTreeNode[],
-  optionalDependencies: DependencyTreeNode[],
+  node: ResolvedNode,
+  dependencies: ResolvedNode[],
+  optionalDependencies: ResolvedNode[],
 }
 
 export default function (
-  dependencyNode$: Rx.Observable<DependencyTreeNode>,
+  resolvedNode$: Rx.Observable<ResolvedNode>,
   shrinkwrap: Shrinkwrap,
   pkg: Package
 ): Rx.Observable<DependencyShrinkwrapContainer> {
   const packages = shrinkwrap.packages || {}
-  return dependencyNode$.mergeMap(dependencyNode => {
-    const dependencyPath = dp.relative(shrinkwrap.registry, dependencyNode.absolutePath)
-    return dependencyNode.children$
-    .mergeMap(childAbsolutePath => dependencyNode$.find(subdep => childAbsolutePath === subdep.absolutePath))
+  return resolvedNode$.mergeMap(resolvedNode => {
+    const dependencyPath = dp.relative(shrinkwrap.registry, resolvedNode.absolutePath)
+    return resolvedNode.children$
+    .mergeMap(childAbsolutePath => resolvedNode$.find(subdep => childAbsolutePath === subdep.absolutePath))
     .reduce((acc, subdep) => {
-      if (dependencyNode.optionalDependencies.has(subdep.name)) {
+      if (resolvedNode.optionalDependencies.has(subdep.name)) {
         acc.optionalDependencies.push(subdep)
       } else {
         acc.dependencies.push(subdep)
       }
       return acc
-    }, {optionalDependencies: [] as DependencyTreeNode[], dependencies: [] as DependencyTreeNode[]})
+    }, {optionalDependencies: [] as ResolvedNode[], dependencies: [] as ResolvedNode[]})
     .map(result => ({
-      node: dependencyNode,
+      node: resolvedNode,
       dependencyPath,
       dependencies: result.dependencies,
       optionalDependencies: result.optionalDependencies,
       snapshot: toShrDependency({
-        dependencyAbsolutePath: dependencyNode.absolutePath,
-        id: dependencyNode.pkgId,
+        dependencyAbsolutePath: resolvedNode.absolutePath,
+        id: resolvedNode.pkgId,
         dependencyPath,
-        resolution: dependencyNode.resolution,
+        resolution: resolvedNode.resolution,
         updatedOptionalDeps: result.optionalDependencies,
         updatedDeps: result.dependencies,
         registry: shrinkwrap.registry,
         prevResolvedDeps: packages[dependencyPath] && packages[dependencyPath].dependencies || {},
         prevResolvedOptionalDeps: packages[dependencyPath] && packages[dependencyPath].optionalDependencies || {},
-        dev: dependencyNode.dev,
-        optional: dependencyNode.optional,
+        dev: resolvedNode.dev,
+        optional: resolvedNode.optional,
       })
     }))
   })
@@ -67,8 +67,8 @@ function toShrDependency (
     dependencyPath: string,
     resolution: Resolution,
     registry: string,
-    updatedDeps: DependencyTreeNode[],
-    updatedOptionalDeps: DependencyTreeNode[],
+    updatedDeps: ResolvedNode[],
+    updatedOptionalDeps: ResolvedNode[],
     prevResolvedDeps: ResolvedDependencies,
     prevResolvedOptionalDeps: ResolvedDependencies,
     dev: boolean,
@@ -104,7 +104,7 @@ function toShrDependency (
 // the `depth` property defines how deep should dependencies be checked
 function updateResolvedDeps (
   prevResolvedDeps: ResolvedDependencies,
-  updatedDeps: DependencyTreeNode[],
+  updatedDeps: ResolvedNode[],
   registry: string
 ) {
   const newResolvedDeps = R.fromPairs<string>(
