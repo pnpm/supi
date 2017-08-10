@@ -152,13 +152,7 @@ function resolvePeersOfNode (
   const childsExternalPeer$ = result.externalPeer$
     .filter(unresolvedPeerNodeId => unresolvedPeerNodeId !== nodeId)
 
-  const ownExternalPeer$ = (
-    R.isEmpty(node.pkg.peerDependencies)
-      ? Rx.Observable.empty<string>()
-      : children$.mergeMap(children => resolvePeers(node, Object.assign({}, parentPkgs,
-        toPkgByName(R.props<TreeNode>(children, ctx.tree))
-      ), ctx.tree))
-  )
+  const ownExternalPeer$ = getOwnExternalPeers(node, children$, parentPkgs, ctx.tree)
 
   const externalPeer$ = childsExternalPeer$.merge(ownExternalPeer$)
 
@@ -167,9 +161,26 @@ function resolvePeersOfNode (
     .map(externalPeers => resolveNode(ctx, node, externalPeers, ownExternalPeer$, result.partiallyResolvedNodeContainer$, childrenSet$))
 
   return {
-    externalPeer$: externalPeer$,
+    externalPeer$,
     partiallyResolvedNodeContainer$: resolvedNode$.merge(result.partiallyResolvedNodeContainer$),
   }
+}
+
+function getOwnExternalPeers (
+  node: TreeNode,
+  children$: Rx.Observable<string[]>,
+  parentParentPkgs: ParentRefs,
+  tree: TreeNodeMap
+) {
+  if (R.isEmpty(node.pkg.peerDependencies)) {
+    return Rx.Observable.empty<string>()
+  }
+  return children$.mergeMap(children => {
+    const parentPkgs = Object.assign({}, parentParentPkgs,
+      toPkgByName(R.props<TreeNode>(children, tree))
+    )
+    return resolvePeers(node, parentPkgs, tree)
+  })
 }
 
 function resolveNode (
