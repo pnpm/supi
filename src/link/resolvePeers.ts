@@ -85,6 +85,7 @@ export default function (
 
   const result = resolvePeersOfChildren(Rx.Observable.of(new Set(rootNodeIds)), pkgsByName, {
     tree,
+    purePkgs: new Set(),
     partiallyResolvedNodeMap: {},
     independentLeaves,
     nodeModules,
@@ -135,12 +136,26 @@ function resolvePeersOfNode (
     nodeModules: string,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
+    purePkgs: Set<string>, // pure packages are those that don't rely on externally resolved peers
   }
 ): {
   externalPeer$: Rx.Observable<string>,
   partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const node = ctx.tree[nodeId]
+  if (ctx.purePkgs.has(node.pkg.id)) {
+    const absolutePath = node.pkg.id
+    return {
+      externalPeer$: Rx.Observable.empty(),
+      partiallyResolvedNodeContainer$: Rx.Observable.of({
+        depth: node.depth,
+        node: ctx.partiallyResolvedNodeMap[absolutePath],
+        nodeId: node.nodeId,
+        isRepeated: true,
+        isCircular: node.isCircular,
+      })
+    }
+  }
 
   const children$ = node.children$.toArray()
 
@@ -191,6 +206,7 @@ function resolveNode (
     nodeModules: string,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
+    purePkgs: Set<string>,
   },
   node: TreeNode,
   externalPeers: string[],
@@ -202,6 +218,7 @@ function resolveNode (
   let absolutePath: string
   const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
   if (!externalPeers.length) {
+    ctx.purePkgs.add(node.pkg.id)
     modules = path.join(localLocation, 'node_modules')
     absolutePath = node.pkg.id
   } else {
@@ -272,6 +289,7 @@ function resolvePeersOfChildren (
     nodeModules: string,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
+    purePkgs: Set<string>,
   }
 ): {
   externalPeer$: Rx.Observable<string>,
@@ -317,9 +335,8 @@ function resolvePeers (
         logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but version ${resolved.version} was installed.`)
       }
 
-      if (resolved.depth === 0 || resolved.depth === node.depth + 1) {
-        // if the resolved package is a top dependency
-        // or the peer dependency is resolved from a regular dependency of the package
+      if (resolved.depth === node.depth + 1) {
+        // if the peer dependency is resolved from a regular dependency of the package
         // then there is no need to link it in
         return Rx.Observable.empty()
       }

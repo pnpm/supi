@@ -35,20 +35,6 @@ test('peer dependency is grouped with dependency when peer is resolved not from 
   t.equal(deepRequireCwd(['using-ajv', 'ajv-keywords', 'ajv', './package.json']).version, '4.10.4')
 })
 
-test('peer dependency is not grouped with dependent when the peer is a top dependency', async (t: tape.Test) => {
-  const project = prepare(t)
-
-  const reporter = sinon.spy()
-
-  await installPkgs(['ajv@4.10.4', 'ajv-keywords@1.5.0'], testDefaults({reporter}))
-
-  t.notOk(reporter.calledWithMatch({
-    message: 'localhost+4873/ajv-keywords/1.5.0 requires a peer of ajv@>=4.10.0 but none was installed.',
-  }), 'no warning is logged about unresolved peer dep')
-
-  t.ok(await exists(path.join(NM, '.localhost+4873', 'ajv-keywords', '1.5.0', NM, 'ajv-keywords')), 'dependent is at the normal location')
-})
-
 test('warning is reported when cannot resolve peer dependency', async (t: tape.Test) => {
   const project = prepare(t)
 
@@ -89,7 +75,7 @@ test('peer dependencies are linked', async (t: tape.Test) => {
   await okFile(t, path.join(pkgVariation1, 'peer-c'))
   await okFile(t, path.join(pkgVariation1, 'dep-of-pkg-with-1-dep'))
 
-  const pkgVariation2 = path.join(pkgVariationsDir, 'peer-a@1.0.0+peer-b@1.0.0', NM)
+  const pkgVariation2 = path.join(pkgVariationsDir, 'peer-a@1.0.0+peer-b@1.0.0+peer-c@2.0.0', NM)
   await okFile(t, path.join(pkgVariation2, 'abc'))
   await okFile(t, path.join(pkgVariation2, 'peer-a'))
   await okFile(t, path.join(pkgVariation2, 'peer-b'))
@@ -128,7 +114,7 @@ test('run pre/postinstall scripts of each variations of packages with peer depen
   await okFile(t, path.join(pkgVariation1, 'pkg-with-events-and-peers', 'generated-by-preinstall.js'))
   await okFile(t, path.join(pkgVariation1, 'pkg-with-events-and-peers', 'generated-by-postinstall.js'))
 
-  const pkgVariation2 = path.join(NM, '.localhost+4873', 'pkg-with-events-and-peers', '1.0.0', NM)
+  const pkgVariation2 = path.join(NM, '.localhost+4873', 'pkg-with-events-and-peers', '1.0.0', 'peer-c@2.0.0', NM)
   await okFile(t, path.join(pkgVariation2, 'pkg-with-events-and-peers', 'generated-by-preinstall.js'))
   await okFile(t, path.join(pkgVariation2, 'pkg-with-events-and-peers', 'generated-by-postinstall.js'))
 })
