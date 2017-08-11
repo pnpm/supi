@@ -122,7 +122,7 @@ export default function (
       }))
       .distinct(v => v.absolutePath) /// this is bad.....
       .shareReplay(Infinity),
-    rootResolvedNode$: result.partiallyResolvedNodeContainer$.filter(node => node.depth === 0).map(container => container.node),
+    rootResolvedNode$: result.partiallyResolvedChildContainer$.map(container => container.node),
   }
 }
 
@@ -140,6 +140,7 @@ function resolvePeersOfNode (
   }
 ): {
   externalPeer$: Rx.Observable<string>,
+  partiallyResolvedChildContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
   partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const node = ctx.tree[nodeId]
@@ -147,13 +148,14 @@ function resolvePeersOfNode (
     const absolutePath = node.pkg.id
     return {
       externalPeer$: Rx.Observable.empty(),
-      partiallyResolvedNodeContainer$: Rx.Observable.of({
+      partiallyResolvedChildContainer$: Rx.Observable.of({
         depth: node.depth,
         node: ctx.partiallyResolvedNodeMap[absolutePath],
         nodeId: node.nodeId,
         isRepeated: true,
         isCircular: node.isCircular,
-      })
+      }),
+      partiallyResolvedNodeContainer$: Rx.Observable.empty(),
     }
   }
 
@@ -171,13 +173,14 @@ function resolvePeersOfNode (
 
   const externalPeer$ = childsExternalPeer$.merge(ownExternalPeer$)
 
-  const resolvedNode$ = externalPeer$
+  const partiallyResolvedChildContainer$ = externalPeer$
     .toArray()
-    .map(externalPeers => resolveNode(ctx, node, externalPeers, ownExternalPeer$, result.partiallyResolvedNodeContainer$, childrenSet$))
+    .map(externalPeers => resolveNode(ctx, node, externalPeers, ownExternalPeer$, result.partiallyResolvedChildContainer$, childrenSet$))
 
   return {
     externalPeer$,
-    partiallyResolvedNodeContainer$: resolvedNode$.merge(result.partiallyResolvedNodeContainer$),
+    partiallyResolvedChildContainer$,
+    partiallyResolvedNodeContainer$: result.partiallyResolvedNodeContainer$,
   }
 }
 
@@ -211,7 +214,7 @@ function resolveNode (
   node: TreeNode,
   externalPeers: string[],
   ownExternalPeer$: Rx.Observable<string>,
-  partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
+  partiallyResolvedChildContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
   childrenSet$: Rx.Observable<Set<string>>
 ) {
   let modules: string
@@ -254,10 +257,7 @@ function resolveNode (
     hardlinkedLocation,
     independent,
     optionalDependencies: node.pkg.optionalDependencies,
-    children$: partiallyResolvedNodeContainer$
-      .filter(childNode => childNode.depth === node.depth + 1)
-      .take(node.pkg.childrenCount)
-      .map(childNode => childNode.node.absolutePath),
+    children$: partiallyResolvedChildContainer$.map(childNode => childNode.node.absolutePath),
     peerNodeIds$: ownExternalPeer$,
     depth: node.depth,
     absolutePath,
@@ -293,6 +293,7 @@ function resolvePeersOfChildren (
   }
 ): {
   externalPeer$: Rx.Observable<string>,
+  partiallyResolvedChildContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
   partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const result = children$.mergeMap(children => {
@@ -305,13 +306,20 @@ function resolvePeersOfChildren (
       .map(child => resolvePeersOfNode(child, parentPkgs, ctx))
       .map(result => ({
         externalPeer$: result.externalPeer$.filter(peer => !children.has(peer)),
+        partiallyResolvedChildContainer$: result.partiallyResolvedChildContainer$,
         partiallyResolvedNodeContainer$: result.partiallyResolvedNodeContainer$,
       }))
   })
+  .shareReplay(1)
 
+  const partiallyResolvedChildContainer$ = result.mergeMap(result => result.partiallyResolvedChildContainer$).shareReplay(Infinity)
   return {
     externalPeer$: result.mergeMap(result => result.externalPeer$),
-    partiallyResolvedNodeContainer$: result.mergeMap(result => result.partiallyResolvedNodeContainer$).shareReplay(Infinity),
+    partiallyResolvedChildContainer$,
+    partiallyResolvedNodeContainer$: Rx.Observable.merge(
+      result.mergeMap(result => result.partiallyResolvedNodeContainer$),
+      partiallyResolvedChildContainer$
+    ).shareReplay(Infinity),
   }
 }
 
