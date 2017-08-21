@@ -380,7 +380,7 @@ test('circular deps', async function (t: tape.Test) {
   t.notOk(await exists(path.join('node_modules', 'circular-deps-1-of-2', 'node_modules', 'circular-deps-2-of-2', 'node_modules', 'circular-deps-1-of-2')), 'circular dependency is avoided')
 })
 
-test('concurrent circular deps', async function (t) {
+test('concurrent circular deps', async (t: tape.Test) => {
   const project = prepare(t)
   await installPkgs(['es6-iterator@2.0.0'], testDefaults())
 
@@ -389,6 +389,8 @@ test('concurrent circular deps', async function (t) {
   t.ok(m, 'es6-iterator is installed')
   t.ok(await exists(path.join('node_modules', '.localhost+4873', 'es6-iterator', '2.0.0', 'node_modules', 'es5-ext')))
   t.ok(await exists(path.join('node_modules', '.localhost+4873', 'es6-iterator', '2.0.1', 'node_modules', 'es5-ext')))
+  t.ok(await exists(path.join('node_modules', '.localhost+4873', 'es5-ext', '0.10.29', 'node_modules', 'es6-iterator')))
+  t.ok(await exists(path.join('node_modules', '.localhost+4873', 'es5-ext', '0.10.29', 'node_modules', 'es6-symbol')))
 })
 
 test('concurrent installation of the same packages', async function (t) {
