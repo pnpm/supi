@@ -112,15 +112,15 @@ export default function (
         }
         return Rx.Observable.of(container)
       })
+      .distinct(container => container.node.absolutePath) /// this is bad.....
       .map(container => Object.assign(container.node, {
         children$: container.node.children$.merge(
           container.node.peerNodeIds$.mergeMap(peerNodeId =>
             result.partiallyResolvedNodeContainer$
-              .find(childNode => childNode.nodeId === peerNodeId)
+              .single(childNode => childNode.nodeId === peerNodeId)
               .map(childNode => childNode.node.absolutePath))
           ),
       }))
-      .distinct(v => v.absolutePath) /// this is bad.....
       .shareReplay(Infinity),
     rootResolvedNode$: result.partiallyResolvedNodeContainer$.filter(node => node.depth === 0).map(container => container.node),
   }
@@ -296,6 +296,14 @@ function resolvePeersOfChildren (
   partiallyResolvedNodeContainer$: Rx.Observable<PartiallyResolvedNodeContainer>,
 } {
   const result = children$.mergeMap(children => {
+    if (!children.size) {
+      return Rx.Observable.of({
+        externalPeer$: Rx.Observable.empty<string>(),
+        partiallyResolvedChildContainer$: Rx.Observable.empty<PartiallyResolvedNodeContainer>(),
+        partiallyResolvedNodeContainer$: Rx.Observable.empty<PartiallyResolvedNodeContainer>(),
+      })
+    }
+
     const childrenArray = Array.from(children)
     const parentPkgs = Object.assign({}, parentParentPkgs,
       toPkgByName(R.props<TreeNode>(childrenArray, ctx.tree))
