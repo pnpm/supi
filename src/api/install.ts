@@ -556,20 +556,20 @@ async function installInContext (
 function buildTree (
   ctx: InstallContext,
   parentNodeId: string,
-  parentId: string,
+  parentPkgId: string,
   depth: number,
   installable: boolean
 ) {
-  return ctx.installs[parentId].children$
-    .filter(childId => parentNodeId.indexOf(`:${parentId}:${childId}:`) === -1)
-    .map(childId => {
-      const childNodeId = `${parentNodeId}${childId}:`
-      installable = installable && !ctx.skipped.has(childId)
+  return ctx.installs[parentPkgId].children$
+  .filter(childPkgId => !parentNodeId.includes(`:${parentPkgId}:${childPkgId}:`))
+  .map(childPkgId => {
+    const childNodeId = `${parentNodeId}${childPkgId}:`
+    installable = installable && !ctx.skipped.has(childPkgId)
       ctx.tree[childNodeId] = {
-        isCircular: parentNodeId.includes(`:${childId}:`),
+        isCircular: parentNodeId.includes(`:${childPkgId}:`),
         nodeId: childNodeId,
-        pkg: ctx.installs[childId],
-        children$: buildTree(ctx, childNodeId, childId, depth + 1, installable),
+        pkg: ctx.installs[childPkgId],
+        children$: buildTree(ctx, childNodeId, childPkgId, depth + 1, installable),
         depth,
         installable,
       }
