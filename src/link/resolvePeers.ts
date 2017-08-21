@@ -167,7 +167,7 @@ function resolvePeersOfNode (
   const childsExternalPeer$ = result.externalPeer$
     .filter(unresolvedPeerNodeId => unresolvedPeerNodeId !== nodeId)
 
-  const ownExternalPeer$ = getOwnExternalPeers(node, children$, parentPkgs, ctx.tree)
+  const ownExternalPeer$ = getOwnExternalPeers(node, children$, parentPkgs, ctx.tree).shareReplay(Infinity)
 
   const externalPeer$ = childsExternalPeer$.merge(ownExternalPeer$)
 

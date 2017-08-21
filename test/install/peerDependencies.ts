@@ -42,9 +42,11 @@ test('warning is reported when cannot resolve peer dependency', async (t: tape.T
 
   await installPkgs(['ajv-keywords@1.5.0'], testDefaults({reporter}))
 
-  t.ok(reporter.calledWithMatch({
-    message: 'localhost+4873/ajv-keywords/1.5.0 requires a peer of ajv@>=4.10.0 but none was installed.',
-  }), 'warning is logged about unresolved peer dep')
+  const expectedMessage = 'localhost+4873/ajv-keywords/1.5.0 requires a peer of ajv@>=4.10.0 but none was installed.'
+  const logMatcher = sinon.match({message: expectedMessage})
+  const reportedTimes = reporter.withArgs(logMatcher).callCount
+
+  t.equal(reportedTimes, 1, 'warning is logged (once) about unresolved peer dep')
 })
 
 test('top peer dependency is not linked on subsequent install', async (t: tape.Test) => {
