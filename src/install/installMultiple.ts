@@ -229,7 +229,7 @@ async function install (
       logger.warn(`Ignoring file dependency because it is not a root dependency ${spec}`)
     } else {
       ctx.localPackages.push({
-        id: fetchedPkg.id,
+        absolutePath: fetchedPkg.id,
         specRaw: spec.raw,
         name: fetchedPkg.pkg.name,
         version: fetchedPkg.pkg.version,

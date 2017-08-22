@@ -10,7 +10,7 @@ export function syncShrinkwrapWithManifest (
     optional: boolean,
     dev: boolean,
     resolution: Resolution,
-    id: string,
+    absolutePath: string,
     name: string,
   }[]
 ) {
@@ -26,7 +26,7 @@ export function syncShrinkwrapWithManifest (
   const getSpecFromPkg = (depName: string) => deps[depName] || devDeps[depName] || optionalDeps[depName]
 
   for (const dep of pkgsToSave) {
-    const ref = absolutePathToRef(dep.id, dep.name, dep.resolution, shrinkwrap.registry)
+    const ref = absolutePathToRef(dep.absolutePath, dep.name, dep.resolution, shrinkwrap.registry)
     if (dep.dev) {
       shrinkwrap.devDependencies[dep.name] = ref
     } else if (dep.optional) {

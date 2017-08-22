@@ -19,6 +19,15 @@ test("don't fail when peer dependency is fetched from GitHub", t => {
   return installPkgs(['test-pnpm-peer-deps'], testDefaults())
 })
 
+// TODO: unite this test with some other
+test('peer dependency is saved to shrinkwrap.yaml', async (t: tape.Test) => {
+  const project = prepare(t)
+  await installPkgs(['react@15.6.1', 'react-dom@15.6.1'], testDefaults())
+
+  const shr = await project.loadShrinkwrap()
+  t.ok(shr.packages['/react-dom/15.6.1/react@15.6.1'])
+})
+
 test('peer dependency is grouped with dependency when peer is resolved not from a top dependency', async (t: tape.Test) => {
   const project = prepare(t)
   await installPkgs(['using-ajv'], testDefaults())

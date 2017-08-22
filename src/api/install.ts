@@ -29,7 +29,6 @@ import {
   Shrinkwrap,
   ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
-import {syncShrinkwrapWithManifest} from '../fs/shrinkwrap'
 import {
   save as saveModules,
   LAYOUT_VERSION,
@@ -77,7 +76,7 @@ export type InstallContext = {
     optional: boolean,
     dev: boolean,
     resolution: DirectoryResolution,
-    id: string,
+    absolutePath: string,
     version: string,
     name: string,
     specRaw: string,
@@ -427,12 +426,6 @@ async function installInContext (
       return acc
     }, {})
   const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
-  const pkgsToSave = (pkgs as {
-    resolution: Resolution,
-    id: string,
-    version: string,
-    name: string,
-  }[]).concat(installCtx.localPackages)
 
   let newPkg: Package | undefined = ctx.pkg
   if (installType === 'named') {
@@ -453,16 +446,6 @@ async function installInContext (
       }).filter(Boolean),
       saveType
     )
-  }
-
-  if (newPkg) {
-    syncShrinkwrapWithManifest(ctx.shrinkwrap, newPkg, pkgsToSave.map(wantedPackage => {
-      const realPackage = packagesToInstall.find(realPackage => realPackage.name === wantedPackage.name)
-      return Object.assign({}, wantedPackage, {
-        dev: !!(realPackage && realPackage.dev),
-        optional: !!(realPackage && realPackage.optional),
-      })
-    }))
   }
 
   const result = await linkPackages(pkgs, rootNodeIds, installCtx.tree, {
@@ -487,6 +470,7 @@ async function installInContext (
     makePartialPrivateShrinkwrap,
     nonDevPackageIds: installCtx.nonDevPackageIds,
     nonOptionalPackageIds: installCtx.nonOptionalPackageIds,
+    localPackages: installCtx.localPackages,
   })
 
   await Promise.all([
@@ -533,7 +517,7 @@ async function installInContext (
       await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
       logStatus({
         status: 'installed',
-        pkgId: localPackage.id,
+        pkgId: localPackage.absolutePath,
       })
     }))
   }

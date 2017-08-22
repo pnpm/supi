@@ -9,7 +9,12 @@ import {InstalledPackage} from '../install/installMultiple'
 import {InstalledPackages, TreeNode} from '../api/install'
 import linkBins, {linkPkgBins} from './linkBins'
 import {Package, Dependencies} from '../types'
-import {Resolution, PackageContentInfo, Store} from 'package-store'
+import {
+  Resolution,
+  PackageContentInfo,
+  Store,
+  DirectoryResolution,
+} from 'package-store'
 import resolvePeers, {ResolvedNode, Map} from './resolvePeers'
 import logStatus from '../logging/logInstallStatus'
 import updateShrinkwrap, {DependencyShrinkwrapContainer} from './updateShrinkwrap'
@@ -24,6 +29,7 @@ import linkIndexedDir from '../fs/linkIndexedDir'
 import ncpCB = require('ncp')
 import thenify = require('thenify')
 import Rx = require('@reactivex/rxjs')
+import {syncShrinkwrapWithManifest} from '../fs/shrinkwrap'
 
 const ncp = thenify(ncpCB)
 
@@ -50,6 +56,15 @@ export default async function (
     independentLeaves: boolean,
     nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
+    localPackages: {
+      optional: boolean,
+      dev: boolean,
+      resolution: DirectoryResolution,
+      absolutePath: string,
+      version: string,
+      name: string,
+      specRaw: string,
+    }[],
   }
 ): Promise<{
   resolvedNodesMap: Map<ResolvedNode>,
@@ -94,6 +109,28 @@ export default async function (
     shrPackages[depShr.dependencyPath] = depShr.snapshot
   })
   opts.shrinkwrap.packages = shrPackages
+
+  const rootResolvedNodes = await rootResolvedNode$
+    .toArray()
+    .toPromise()
+
+  const pkgsToSave = (rootResolvedNodes as {
+    resolution: Resolution,
+    absolutePath: string,
+    version: string,
+    name: string,
+    dev: boolean,
+    optional: boolean,
+  }[]).concat(opts.localPackages)
+  syncShrinkwrapWithManifest(opts.shrinkwrap, opts.pkg,
+    pkgsToSave.map(resolvedNode => ({
+      optional: resolvedNode.optional,
+      dev: resolvedNode.dev,
+      absolutePath: resolvedNode.absolutePath,
+      name: resolvedNode.name,
+      resolution: resolvedNode.resolution,
+    })))
+
   const newShr = await pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
 
   await removeOrphanPkgs({
