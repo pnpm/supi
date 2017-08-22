@@ -101,9 +101,13 @@ export default function (
         }
         if (container.isCircular) {
           return result.partiallyResolvedNodeContainer$
-            .skipWhile(nextContainer => nextContainer.nodeId !== container.nodeId)
-            .take(1)
+            .find(nextContainer => !nextContainer.isCircular &&
+              container.node.pkgId === nextContainer.node.pkgId &&
+              container.nodeId.startsWith(nextContainer.nodeId))
             .mergeMap(nextContainer => {
+              if (!nextContainer) {
+                return Rx.Observable.of(container)
+              }
               if (nextContainer.node.absolutePath === container.node.absolutePath) {
                 return Rx.Observable.of(nextContainer)
               }
@@ -227,7 +231,10 @@ function resolveNode (
     absolutePath = `${node.pkg.id}/${peersFolder}`
   }
 
-  if (ctx.partiallyResolvedNodeMap[absolutePath] && ctx.partiallyResolvedNodeMap[absolutePath].depth <= node.depth) {
+  if (ctx.partiallyResolvedNodeMap[absolutePath] &&
+    // TODO: check isCircular instead of depth here
+    ctx.partiallyResolvedNodeMap[absolutePath].depth <= node.depth) {
+
     return {
       depth: node.depth,
       node: ctx.partiallyResolvedNodeMap[absolutePath],
