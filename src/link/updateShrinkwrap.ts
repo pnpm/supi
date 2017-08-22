@@ -58,6 +58,7 @@ export default function (
       })
     }))
   })
+  .shareReplay(Infinity)
 }
 
 function toShrDependency (
