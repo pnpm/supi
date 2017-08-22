@@ -87,6 +87,7 @@ export default async function (
     opts,
     opts.shrinkwrap.registry
   )
+  .shareReplay(Infinity)
 
   const shrPackages = opts.shrinkwrap.packages || {}
   await depShr$.forEach(depShr => {
