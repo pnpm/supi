@@ -392,27 +392,24 @@ async function installInContext (
     installOpts
   )
 
-  const rootPackageRequests = await packageRequests$
+  installCtx.tree = {}
+  const rootPackageRequests$ = packageRequests$
     .filter(request => request.depth === 0)
     .take(nonLinkedPkgs.length)
-    .toArray()
-    .toPromise()
+    .do(packageRequest => {
+      const nodeId = `:/:${packageRequest.package.id}:`
+      installCtx.tree[nodeId] = {
+        nodeId,
+        pkg: packageRequest.package,
+        children$: buildTree(installCtx, nodeId, packageRequest.package.id, 1, packageRequest.package.installable),
+        depth: 0,
+        installable: packageRequest.package.installable,
+        isCircular: false,
+      }
+    })
+    .shareReplay(Infinity)
 
-  installCtx.tree = {}
-  const rootNodeIds: string[] = []
-
-  for (const packageRequest of rootPackageRequests) {
-    const nodeId = `:/:${packageRequest.package.id}:`
-    rootNodeIds.push(nodeId)
-    installCtx.tree[nodeId] = {
-      nodeId,
-      pkg: packageRequest.package,
-      children$: buildTree(installCtx, nodeId, packageRequest.package.id, 1, packageRequest.package.installable),
-      depth: 0,
-      installable: packageRequest.package.installable,
-      isCircular: false,
-    }
-  }
+  const rootNodeId$ = rootPackageRequests$.map(packageRequest => `:/:${packageRequest.package.id}:`)
 
   packageRequests$.subscribe({
     error: () => {},
@@ -420,12 +417,12 @@ async function installInContext (
     complete: () => stageLogger.debug('resolution_done'),
   })
 
-  const pkgByRawSpec = rootPackageRequests
+  const pkgByRawSpec = await rootPackageRequests$
     .reduce((acc: {}, packageRequest: PackageRequest) => {
       acc[packageRequest.specRaw] = packageRequest.package
       return acc
     }, {})
-  const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
+    .toPromise()
 
   let newPkg: Package | undefined = ctx.pkg
   if (installType === 'named') {
@@ -448,7 +445,7 @@ async function installInContext (
     )
   }
 
-  const result = await linkPackages(pkgs, rootNodeIds, installCtx.tree, {
+  const result = await linkPackages(rootNodeId$, installCtx.tree, {
     force: opts.force,
     global: opts.global,
     baseNodeModules: nodeModulesPath,

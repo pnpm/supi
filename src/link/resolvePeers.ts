@@ -58,8 +58,7 @@ export type Map<T> = {
 
 export default function (
   tree: TreeNodeMap,
-  rootNodeIds: string[],
-  topPkgIds: string[],
+  rootNodeId$: Rx.Observable<string>,
   // only the top dependencies that were already installed
   // to avoid warnings about unresolved peer dependencies
   topParents: {name: string, version: string}[],
@@ -83,7 +82,7 @@ export default function (
     ])
   )
 
-  const result = resolvePeersOfChildren(Rx.Observable.of(new Set(rootNodeIds)), pkgsByName, {
+  const result = resolvePeersOfChildren(rootNodeId$.toArray().map(rootNodeIds => new Set(rootNodeIds)), pkgsByName, {
     tree,
     purePkgs: new Set(),
     partiallyResolvedNodeMap: {},

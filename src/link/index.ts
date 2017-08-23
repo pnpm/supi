@@ -34,8 +34,7 @@ import {syncShrinkwrapWithManifest} from '../fs/shrinkwrap'
 const ncp = thenify(ncpCB)
 
 export default async function (
-  topPkgs: InstalledPackage[],
-  rootNodeIds: string[],
+  rootNodeId$: Rx.Observable<string>,
   tree: {[nodeId: string]: TreeNode},
   opts: {
     force: boolean,
@@ -72,12 +71,10 @@ export default async function (
   privateShrinkwrap: Shrinkwrap,
   updatedPkgsAbsolutePaths: string[],
 }> {
-  const topPkgIds = topPkgs.map(pkg => pkg.id)
   logger.info(`Creating dependency tree`)
   const resolvePeersResult = resolvePeers(
     tree,
-    rootNodeIds,
-    topPkgIds,
+    rootNodeId$,
     opts.topParents,
     opts.independentLeaves,
     opts.baseNodeModules, {
@@ -103,6 +100,10 @@ export default async function (
     opts.shrinkwrap.registry
   )
   .shareReplay(Infinity)
+
+  const updatedPkgsAbsolutePaths = await updatedPkgsAbsolutePaths$
+    .toArray()
+    .toPromise()
 
   const shrPackages = opts.shrinkwrap.packages || {}
   await depShr$.forEach(depShr => {
@@ -171,9 +172,6 @@ export default async function (
     })
   }
 
-  const updatedPkgsAbsolutePaths = await updatedPkgsAbsolutePaths$
-    .toArray()
-    .toPromise()
   const resolvedNodesMap = await resolvedNode$
     .map(resolvedNode => [resolvedNode.absolutePath, resolvedNode])
     .toArray()
