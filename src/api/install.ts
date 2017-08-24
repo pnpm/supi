@@ -417,18 +417,17 @@ async function installInContext (
     complete: () => stageLogger.debug('resolution_done'),
   })
 
-  const pkgByRawSpec = await rootPackageRequests$
-    .reduce((acc: {}, packageRequest: PackageRequest) => {
-      acc[packageRequest.specRaw] = packageRequest.package
-      return acc
-    }, {})
-    .toPromise()
-
   let newPkg: Package | undefined = ctx.pkg
   if (installType === 'named') {
     if (!ctx.pkg) {
       throw new Error('Cannot save because no package.json found')
     }
+    const pkgByRawSpec = await rootPackageRequests$
+      .reduce((acc: {}, packageRequest: PackageRequest) => {
+        acc[packageRequest.specRaw] = packageRequest.package
+        return acc
+      }, {})
+      .toPromise()
     const pkgJsonPath = path.join(ctx.root, 'package.json')
     const saveType = getSaveType(opts)
     newPkg = await save(

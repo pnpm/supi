@@ -27,36 +27,38 @@ export default function (
 ): Rx.Observable<DependencyShrinkwrapContainer> {
   const packages = shrinkwrap.packages || {}
   return resolvedNode$.mergeMap(resolvedNode => {
-    const dependencyPath = dp.relative(shrinkwrap.registry, resolvedNode.absolutePath)
     return resolvedNode.children$
-    .mergeMap(childAbsolutePath => resolvedNode$.single(subdep => childAbsolutePath === subdep.absolutePath))
-    .reduce((acc, subdep) => {
-      if (resolvedNode.optionalDependencies.has(subdep.name)) {
-        acc.optionalDependencies.push(subdep)
-      } else {
-        acc.dependencies.push(subdep)
-      }
-      return acc
-    }, {optionalDependencies: [] as ResolvedNode[], dependencies: [] as ResolvedNode[]})
-    .map(result => ({
-      node: resolvedNode,
-      dependencyPath,
-      dependencies: result.dependencies,
-      optionalDependencies: result.optionalDependencies,
-      snapshot: toShrDependency({
-        dependencyAbsolutePath: resolvedNode.absolutePath,
-        id: resolvedNode.pkgId,
-        dependencyPath,
-        resolution: resolvedNode.resolution,
-        updatedOptionalDeps: result.optionalDependencies,
-        updatedDeps: result.dependencies,
-        registry: shrinkwrap.registry,
-        prevResolvedDeps: packages[dependencyPath] && packages[dependencyPath].dependencies || {},
-        prevResolvedOptionalDeps: packages[dependencyPath] && packages[dependencyPath].optionalDependencies || {},
-        dev: resolvedNode.dev,
-        optional: resolvedNode.optional,
+      .mergeMap(childAbsolutePath => resolvedNode$.single(subdep => childAbsolutePath === subdep.absolutePath))
+      .reduce((acc, subdep) => {
+        if (resolvedNode.optionalDependencies.has(subdep.name)) {
+          acc.optionalDependencies.push(subdep)
+        } else {
+          acc.dependencies.push(subdep)
+        }
+        return acc
+      }, {optionalDependencies: [] as ResolvedNode[], dependencies: [] as ResolvedNode[]})
+      .map(result => {
+        const dependencyPath = dp.relative(shrinkwrap.registry, resolvedNode.absolutePath)
+        return {
+          node: resolvedNode,
+          dependencyPath,
+          dependencies: result.dependencies,
+          optionalDependencies: result.optionalDependencies,
+          snapshot: toShrDependency({
+            dependencyAbsolutePath: resolvedNode.absolutePath,
+            id: resolvedNode.pkgId,
+            dependencyPath,
+            resolution: resolvedNode.resolution,
+            updatedOptionalDeps: result.optionalDependencies,
+            updatedDeps: result.dependencies,
+            registry: shrinkwrap.registry,
+            prevResolvedDeps: packages[dependencyPath] && packages[dependencyPath].dependencies || {},
+            prevResolvedOptionalDeps: packages[dependencyPath] && packages[dependencyPath].optionalDependencies || {},
+            dev: resolvedNode.dev,
+            optional: resolvedNode.optional,
+          })
+        }
       })
-    }))
   })
   .shareReplay(Infinity)
 }
