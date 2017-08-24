@@ -450,10 +450,10 @@ async function installInContext (
     global: opts.global,
     baseNodeModules: nodeModulesPath,
     bin: opts.bin,
-    topParents: ctx.pkg
-      ? await getTopParents(
+    topParent$: ctx.pkg
+      ? getTopParents(
           R.difference(R.keys(depsFromPackage(ctx.pkg)), newPkgs), nodeModulesPath)
-      : [],
+      : Rx.Observable.empty(),
     shrinkwrap: ctx.shrinkwrap,
     production: opts.production,
     optional: opts.optional,
@@ -558,14 +558,18 @@ function buildTree (
     })
 }
 
-async function getTopParents (pkgNames: string[], modules: string) {
-  const pkgs = await Promise.all(
-    pkgNames.map(pkgName => path.join(modules, pkgName)).map(safeReadPkgFromDir)
-  )
-  return pkgs.filter(Boolean).map((pkg: Package) => ({
-    name: pkg.name,
-    version: pkg.version,
-  }))
+function getTopParents (
+  pkgNames: string[],
+  modules: string
+): Rx.Observable<{name: string, version: string}> {
+  return Rx.Observable.from(pkgNames)
+    .map(pkgName => path.join(modules, pkgName))
+    .mergeMap(pkgPath => Rx.Observable.fromPromise(safeReadPkgFromDir(pkgPath)))
+    .filter(Boolean)
+    .map((pkg: Package) => ({
+      name: pkg.name,
+      version: pkg.version,
+    }))
 }
 
 function getSaveSpec(spec: PackageSpec, version: string, saveExact: boolean) {

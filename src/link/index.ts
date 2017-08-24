@@ -41,7 +41,7 @@ export default async function (
     global: boolean,
     baseNodeModules: string,
     bin: string,
-    topParents: {name: string, version: string}[],
+    topParent$: Rx.Observable<{name: string, version: string}>,
     shrinkwrap: Shrinkwrap,
     privateShrinkwrap: Shrinkwrap,
     makePartialPrivateShrinkwrap: boolean,
@@ -75,7 +75,7 @@ export default async function (
   const resolvePeersResult = resolvePeers(
     tree,
     rootNodeId$,
-    opts.topParents,
+    opts.topParent$,
     opts.independentLeaves,
     opts.baseNodeModules, {
       nonDevPackageIds: opts.nonDevPackageIds,
