@@ -4,7 +4,6 @@ import symlinkDir = require('symlink-dir')
 import exists = require('path-exists')
 import logger, {rootLogger} from 'pnpm-logger'
 import R = require('ramda')
-import pLimit = require('p-limit')
 import {InstalledPackage} from '../install/installMultiple'
 import {InstalledPackages, TreeNode} from '../api/install'
 import linkBins, {linkPkgBins} from './linkBins'
@@ -265,7 +264,7 @@ function linkNewPackages (
   const linkedPkg$ = pkgToLink$
     .mergeMap(resolvedPkg => {
       const wantedDependencies = resolvedPkg.dependencies.concat(opts.optional ? resolvedPkg.optionalDependencies : [])
-      const linkModules$ = Rx.Observable.fromPromise(linkModules(resolvedPkg.node, wantedDependencies))
+      const linkModules$ = linkModules(resolvedPkg.node, wantedDependencies)
       const linkPkgContent$ = copy
         ? Rx.Observable.fromPromise(linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts))
         : Rx.Observable.fromPromise(linkPkgToAbsPath(linkPkg, resolvedPkg.node, opts))
@@ -303,15 +302,13 @@ function linkNewPackages (
           return linkedPkg$.merge(upToDatePkg$).find(_ => _.resolvedPkg.node.absolutePath === depWithBins.absolutePath)
         })
         .mergeMap(_ => {
-          return Rx.Observable.fromPromise(_linkBins(linkedPkg.resolvedPkg.node, _.resolvedPkg.node))
+          return _linkBins(linkedPkg.resolvedPkg.node, _.resolvedPkg.node)
         })
         .last()
         .mapTo(linkedPkg.resolvedPkg)
     })
     .map(resolvedPkg => resolvedPkg.node.absolutePath)
 }
-
-const limitLinking = pLimit(16)
 
 async function linkPkgToAbsPath (
   linkPkg: (fetchResult: PackageContentInfo, dependency: ResolvedNode, opts: {
@@ -328,31 +325,34 @@ async function linkPkgToAbsPath (
   const fetchResult = await pkg.fetchingFiles
 
   if (pkg.independent) return
-  return limitLinking(() => linkPkg(fetchResult, pkg, opts))
+  return linkPkg(fetchResult, pkg, opts)
 }
 
 function _linkBins (
   pkg: ResolvedNode,
   dependency: ResolvedNode
 ) {
-  return limitLinking(async () => {
-    const binPath = path.join(pkg.hardlinkedLocation, 'node_modules', '.bin')
+  const binPath = path.join(pkg.hardlinkedLocation, 'node_modules', '.bin')
 
-    if (!dependency.installable) return
+  if (!dependency.installable) return Rx.Observable.empty()
 
-    return linkPkgBins(path.join(pkg.modules, dependency.name), binPath)
-  })
+  return Rx.Observable.fromPromise(
+    linkPkgBins(path.join(pkg.modules, dependency.name), binPath)
+  )
 }
 
-async function linkModules (
+function linkModules (
   pkg: ResolvedNode,
   deps: ResolvedNode[]
 ) {
-  if (pkg.independent) return
+  if (pkg.independent) return Rx.Observable.empty()
 
-  return limitLinking(() => Promise.all(deps
-    .filter(child => child.installable)
-    .map(child => symlinkDependencyTo(child, pkg.modules)))
+  return Rx.Observable.fromPromise(
+    Promise.all(
+      deps
+        .filter(child => child.installable)
+        .map(child => symlinkDependencyTo(child, pkg.modules))
+    )
   )
 }
 
