@@ -33,7 +33,7 @@ import Rx = require('@reactivex/rxjs')
 
 export type PackageRequest = {
   specRaw: string,
-  package: InstalledPackage,
+  pkgId: string,
   depth: number,
 }
 
@@ -290,7 +290,8 @@ async function install (
   if (!spec.dev) {
     ctx.nonDevPackageIds.add(fetchedPkg.id)
   }
-  if (!ctx.installs[fetchedPkg.id]) {
+  if (!ctx.processed.has(fetchedPkg.id)) {
+    ctx.processed.add(fetchedPkg.id)
     if (!installable) {
       // optional dependencies are resolved for consistent shrinkwrap.yaml files
       // but installed only on machines that are supported by the package
@@ -332,19 +333,19 @@ async function install (
       children$: installDepsResult.children$
         .filter(child => child.depth === options.currentDepth + 1)
         .take(installDepsResult.directChildrenCount)
-        .map(child => child.package.id),
+        .map(child => child.pkgId),
       installable: currentIsInstallable,
     }
 
     return installDepsResult.children$.startWith({
-      package: ctx.installs[fetchedPkg.id],
+      pkgId: fetchedPkg.id,
       depth: options.currentDepth,
       specRaw: spec.raw,
     })
   }
 
   return Rx.Observable.of({
-    package: ctx.installs[fetchedPkg.id],
+    pkgId: fetchedPkg.id,
     depth: options.currentDepth,
     specRaw: spec.raw,
   })

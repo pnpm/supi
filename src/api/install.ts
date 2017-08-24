@@ -72,6 +72,7 @@ export type TreeNodeMap = {
 
 export type InstallContext = {
   installs: InstalledPackages,
+  processed: Set<string>,
   localPackages: {
     optional: boolean,
     dev: boolean,
@@ -375,6 +376,7 @@ async function installInContext (
     }),
     nonDevPackageIds: new Set(),
     nonOptionalPackageIds: new Set(),
+    processed: new Set(),
   }
   const installOpts = {
     root: ctx.root,
@@ -397,19 +399,20 @@ async function installInContext (
     .filter(request => request.depth === 0)
     .take(nonLinkedPkgs.length)
     .do(packageRequest => {
-      const nodeId = `:/:${packageRequest.package.id}:`
+      const nodeId = `:/:${packageRequest.pkgId}:`
+      const pkg = installCtx.installs[packageRequest.pkgId]
       installCtx.tree[nodeId] = {
         nodeId,
-        pkg: packageRequest.package,
-        children$: buildTree(installCtx, nodeId, packageRequest.package.id, 1, packageRequest.package.installable),
+        pkg,
+        children$: buildTree(installCtx, nodeId, packageRequest.pkgId, 1, pkg.installable),
         depth: 0,
-        installable: packageRequest.package.installable,
+        installable: pkg.installable,
         isCircular: false,
       }
     })
     .shareReplay(Infinity)
 
-  const rootNodeId$ = rootPackageRequests$.map(packageRequest => `:/:${packageRequest.package.id}:`)
+  const rootNodeId$ = rootPackageRequests$.map(packageRequest => `:/:${packageRequest.pkgId}:`)
 
   packageRequests$.subscribe({
     error: () => {},
@@ -424,7 +427,7 @@ async function installInContext (
     }
     const pkgByRawSpec = await rootPackageRequests$
       .reduce((acc: {}, packageRequest: PackageRequest) => {
-        acc[packageRequest.specRaw] = packageRequest.package
+        acc[packageRequest.specRaw] = installCtx.installs[packageRequest.pkgId]
         return acc
       }, {})
       .toPromise()
