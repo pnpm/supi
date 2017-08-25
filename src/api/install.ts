@@ -3,7 +3,6 @@ import RegClient = require('npm-registry-client')
 import logger, {
   streamParser,
   lifecycleLogger,
-  stageLogger,
   summaryLogger,
 } from 'pnpm-logger'
 import logStatus from '../logging/logInstallStatus'
@@ -396,7 +395,6 @@ async function installInContext (
 
   installCtx.tree = {}
   const rootPackageRequests$ = packageRequests$
-    .filter(request => request.depth === 0)
     .take(nonLinkedPkgs.length)
     .do(packageRequest => {
       const nodeId = `:/:${packageRequest.pkgId}:`
@@ -413,12 +411,6 @@ async function installInContext (
     .shareReplay(Infinity)
 
   const rootNodeId$ = rootPackageRequests$.map(packageRequest => `:/:${packageRequest.pkgId}:`)
-
-  packageRequests$.subscribe({
-    error: () => {},
-    next: () => {},
-    complete: () => stageLogger.debug('resolution_done'),
-  })
 
   let newPkg: Package | undefined = ctx.pkg
   if (installType === 'named') {

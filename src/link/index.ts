@@ -2,7 +2,10 @@ import fs = require('mz/fs')
 import path = require('path')
 import symlinkDir = require('symlink-dir')
 import exists = require('path-exists')
-import logger, {rootLogger} from 'pnpm-logger'
+import logger, {
+  rootLogger,
+  stageLogger,
+} from 'pnpm-logger'
 import R = require('ramda')
 import {InstalledPackage} from '../install/installMultiple'
 import {InstalledPackages, TreeNode} from '../api/install'
@@ -84,6 +87,11 @@ export default async function (
   const resolvedNode$ = resolvePeersResult.resolvedNode$
   const rootResolvedNode$ = resolvePeersResult.rootResolvedNode$
 
+  resolvedNode$.subscribe({
+    error: () => {},
+    next: () => {},
+    complete: () => stageLogger.debug('resolution_done'),
+  })
   const depShr$ = updateShrinkwrap(resolvedNode$, opts.shrinkwrap, opts.pkg)
 
   const filterOpts = {

@@ -330,14 +330,11 @@ async function install (
       hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
       hasBins: pkgHasBins(pkg),
       childrenCount: installDepsResult.directChildrenCount,
-      children$: installDepsResult.children$
-        .filter(child => child.depth === options.currentDepth + 1)
-        .take(installDepsResult.directChildrenCount)
-        .map(child => child.pkgId),
+      children$: installDepsResult.children$.map(child => child.pkgId),
       installable: currentIsInstallable,
     }
 
-    return installDepsResult.children$.startWith({
+    return Rx.Observable.of({
       pkgId: fetchedPkg.id,
       depth: options.currentDepth,
       specRaw: spec.raw,
