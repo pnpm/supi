@@ -137,16 +137,17 @@ export default async function (
       resolution: resolvedNode.resolution,
     })))
 
-  const newShr = await pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
+  const newShr = pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
 
-  await removeOrphanPkgs({
+  const waitq: Promise<{} | void>[] = []
+  waitq.push(removeOrphanPkgs({
     oldShrinkwrap: opts.privateShrinkwrap,
     newShrinkwrap: newShr,
     prefix: opts.root,
     store: opts.storePath,
     storeIndex: opts.storeIndex,
     bin: opts.bin,
-  })
+  }))
 
   let wantedRootResolvedNode$ = rootResolvedNode$.filter(dep => !opts.skipped.has(dep.pkgId))
   if (opts.production) {
@@ -155,33 +156,39 @@ export default async function (
   if (!opts.optional) {
     wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.optional)
   }
-  const wantedRootResolvedNodes = await wantedRootResolvedNode$
-    .toArray()
-    .toPromise()
 
-  for (let resolvedNode of wantedRootResolvedNodes) {
-    const symlinkingResult = await symlinkDependencyTo(resolvedNode, opts.baseNodeModules)
-    if (!symlinkingResult.reused) {
-      rootLogger.info({
-        added: {
-          id: resolvedNode.pkgId,
-          name: resolvedNode.name,
-          version: resolvedNode.version,
-          dependencyType: resolvedNode.dev && 'dev' || resolvedNode.optional && 'optional' || 'prod',
-        },
-      })
-    }
-    logStatus({
-      status: 'installed',
-      pkgId: resolvedNode.pkgId,
+  waitq.push(
+    wantedRootResolvedNode$.mergeMap(resolvedNode => {
+      return Rx.Observable.fromPromise(symlinkDependencyTo(resolvedNode, opts.baseNodeModules))
+        .map(symlinkingResult => {
+          if (!symlinkingResult.reused) {
+            rootLogger.info({
+              added: {
+                id: resolvedNode.pkgId,
+                name: resolvedNode.name,
+                version: resolvedNode.version,
+                dependencyType: resolvedNode.dev && 'dev' || resolvedNode.optional && 'optional' || 'prod',
+              },
+            })
+          }
+          logStatus({
+            status: 'installed',
+            pkgId: resolvedNode.pkgId,
+          })
+        })
     })
-  }
-
-  const resolvedNodesMap = await resolvedNode$
-    .map(resolvedNode => [resolvedNode.absolutePath, resolvedNode])
-    .toArray()
-    .map(R.fromPairs)
     .toPromise()
+  )
+
+  waitq.push(
+    resolvedNode$
+      .map(resolvedNode => [resolvedNode.absolutePath, resolvedNode])
+      .toArray()
+      .map(R.fromPairs)
+      .toPromise()
+  )
+
+  const resolvedNodesMap = (await Promise.all(waitq))[2] as Map<ResolvedNode>
 
   await linkBins(opts.baseNodeModules, opts.bin)
 
