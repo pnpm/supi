@@ -722,18 +722,19 @@ test('self-require should work', async function (t) {
   t.ok(project.requireModule('uses-pkg-with-self-usage'))
 })
 
-test('install on project with lockfile and no node_modules', async (t: tape.Test) => {
+test('named install on project with lockfile and no node_modules should fail', async (t: tape.Test) => {
   const project = prepare(t)
 
   await installPkgs(['is-negative'], testDefaults())
 
   await rimraf('node_modules')
 
-  await installPkgs(['is-positive'], testDefaults())
-
-  t.ok(project.requireModule('is-positive'), 'installed new dependency')
-
-  t.ok(project.hasNot('is-negative'), 'did not reinstall removed dependency')
+  try {
+    await installPkgs(['is-positive'], testDefaults())
+    t.fail('should have failed')
+  } catch (err) {
+    t.equal(err['code'], 'OUT_OF_DATE_NODE_MODULES', 'correct error code')
+  }
 })
 
 test('install a dependency with * range', async (t: tape.Test) => {
