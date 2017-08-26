@@ -28,7 +28,6 @@ export default function (
   const packages = shrinkwrap.packages || {}
   return resolvedNode$.mergeMap(resolvedNode => {
     return resolvedNode.children$
-      .mergeMap(childAbsolutePath => resolvedNode$.single(subdep => childAbsolutePath === subdep.absolutePath))
       .reduce((acc, subdep) => {
         if (resolvedNode.optionalDependencies.has(subdep.name)) {
           acc.optionalDependencies.push(subdep)

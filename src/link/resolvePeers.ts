@@ -34,7 +34,7 @@ export type ResolvedNode = {
   fetchingFiles: Promise<PackageContentInfo>,
   resolution: Resolution,
   hardlinkedLocation: string,
-  children$: Rx.Observable<string>,
+  children$: Rx.Observable<ResolvedNode>,
   // an independent package is a package that
   // has neither regular nor peer dependencies
   independent: boolean,
@@ -121,7 +121,7 @@ export default function (
           container.node.peerNodeIds$.mergeMap(peerNodeId =>
             result.partiallyResolvedNodeContainer$
               .single(childNode => childNode.nodeId === peerNodeId)
-              .map(childNode => childNode.node.absolutePath))
+              .map(childNode => childNode.node))
           ),
       }))
       .shareReplay(Infinity),
@@ -247,7 +247,7 @@ function resolveNode (
     hardlinkedLocation,
     independent,
     optionalDependencies: node.pkg.optionalDependencies,
-    children$: partiallyResolvedChildContainer$.map(childNode => childNode.node.absolutePath),
+    children$: partiallyResolvedChildContainer$.map(childNode => childNode.node),
     peerNodeIds$: ownExternalPeer$,
     depth: node.depth,
     absolutePath,
