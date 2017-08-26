@@ -236,27 +236,35 @@ function linkNewPackages (
 ): Rx.Observable<string> {
   let copy = false
   const prevPackages = privateShrinkwrap.packages || {}
-  const pkgToLink$ = resolvedPkg$
+  const outOfDateResolvedPkg$ = resolvedPkg$
     .filter(resolvedPkg => {
       if (!resolvedPkg.node.installable) return false
 
       // TODO: what if the registries differ?
-      if (!opts.force && prevPackages[resolvedPkg.dependencyPath]) {
-        // add subdependencies that have been updated
-        // TODO: no need to relink everything. Can be relinked only what was changed
-        if (!(prevPackages[resolvedPkg.dependencyPath] &&
-          (!R.equals(prevPackages[resolvedPkg.dependencyPath].dependencies, resolvedPkg.snapshot.dependencies) ||
-          !R.equals(prevPackages[resolvedPkg.dependencyPath].optionalDependencies, resolvedPkg.snapshot.optionalDependencies)))) {
-          return false
-        }
+      if (opts.force || !prevPackages[resolvedPkg.dependencyPath]) {
+        return true
       }
-      return true
-    })
 
-  const linkedPkg$ = pkgToLink$
+      // add subdependencies that have been updated
+      // TODO: no need to relink everything. Can be relinked only what was changed
+      return !R.equals(prevPackages[resolvedPkg.dependencyPath].dependencies, resolvedPkg.snapshot.dependencies) ||
+        !R.equals(prevPackages[resolvedPkg.dependencyPath].optionalDependencies, resolvedPkg.snapshot.optionalDependencies)
+    })
+    .shareReplay(Infinity)
+
+  const pkgWithLinkedModules$ = outOfDateResolvedPkg$
     .mergeMap(resolvedPkg => {
       const wantedDependencies = resolvedPkg.dependencies.concat(opts.optional ? resolvedPkg.optionalDependencies : [])
-      const linkModules$ = linkModules(resolvedPkg.node, wantedDependencies)
+      return linkModules(resolvedPkg.node, wantedDependencies)
+        .mapTo({
+          resolvedPkg,
+          dependenciesWithBins: wantedDependencies.filter(pkg => pkg.hasBins),
+        })
+    })
+    .shareReplay(Infinity)
+
+  const pkgWithLinkedContent$ = outOfDateResolvedPkg$
+    .mergeMap(resolvedPkg => {
       const linkPkgContent$ = copy
         ? Rx.Observable.fromPromise(linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts))
         : Rx.Observable.fromPromise(linkPkgToAbsPath(linkPkg, resolvedPkg.node, opts))
@@ -267,43 +275,47 @@ function linkNewPackages (
             logger.info('Falling back to copying packages from store')
             return Rx.Observable.fromPromise(linkPkgToAbsPath(copyPkg, resolvedPkg.node, opts))
           })
-      return Rx.Observable.merge(linkModules$, linkPkgContent$)
-        .last()
-        .mergeMap(() => {
-          // link also the bundled dependencies` bins
-          if (resolvedPkg.node.hasBundledDependencies) {
+      if (resolvedPkg.node.hasBundledDependencies) {
+        // link the bundled dependencies` bins
+        return linkPkgContent$
+          .mergeMap(() => {
             const binPath = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules', '.bin')
             const bundledModules = path.join(resolvedPkg.node.hardlinkedLocation, 'node_modules')
             return Rx.Observable.fromPromise(linkBins(bundledModules, binPath))
-          }
-          return Rx.Observable.of(undefined)
-        })
-        .last()
+          })
+          .mapTo({
+            resolvedPkg,
+          })
+      }
+      return linkPkgContent$
         .mapTo({
           resolvedPkg,
-          dependenciesWithBins: wantedDependencies.filter(pkg => pkg.hasBins),
         })
     })
     .shareReplay(Infinity)
 
-  return linkedPkg$
-    .mergeMap(linkedPkg => {
-      if (!linkedPkg.dependenciesWithBins.length) return Rx.Observable.of(linkedPkg.resolvedPkg)
-      return Rx.Observable.from(linkedPkg.dependenciesWithBins)
-        .mergeMap(depWithBins => {
-          return linkedPkg$
-            .map(_ => _.resolvedPkg.node)
-            .filter(resolvedNode => resolvedNode.absolutePath === depWithBins.absolutePath)
-            .concat(Rx.Observable.of(depWithBins))
-            .take(1)
-        })
-        .mergeMap(resolvedNode => {
-          return _linkBins(linkedPkg.resolvedPkg.node, resolvedNode)
-        })
-        .last()
-        .mapTo(linkedPkg.resolvedPkg)
-    })
-    .map(resolvedPkg => resolvedPkg.node.absolutePath)
+  return pkgWithLinkedContent$.mergeMap(linkedPkg => {
+    return pkgWithLinkedModules$
+      .single(withLinkedModules => withLinkedModules.resolvedPkg.node.absolutePath === linkedPkg.resolvedPkg.node.absolutePath)
+      .mergeMap(linkedPkg => {
+        if (!linkedPkg.dependenciesWithBins.length) {
+          return Rx.Observable.of(linkedPkg.resolvedPkg)
+        }
+        return Rx.Observable.from(linkedPkg.dependenciesWithBins)
+          .mergeMap(depWithBins => {
+            return pkgWithLinkedContent$
+              .map(_ => _.resolvedPkg.node)
+              .filter(resolvedNode => resolvedNode.absolutePath === depWithBins.absolutePath)
+              .concat(Rx.Observable.of(depWithBins))
+              .take(1)
+          })
+          .mergeMap(resolvedNode => {
+            return _linkBins(linkedPkg.resolvedPkg.node, resolvedNode)
+          })
+          .last()
+      })
+      .mapTo(linkedPkg.resolvedPkg.node.absolutePath)
+  })
 }
 
 async function linkPkgToAbsPath (
@@ -320,7 +332,7 @@ async function linkPkgToAbsPath (
 ) {
   const fetchResult = await pkg.fetchingFiles
 
-  if (pkg.independent) return
+  if (pkg.independent) return Rx.Observable.of(undefined)
   return linkPkg(fetchResult, pkg, opts)
 }
 
@@ -341,7 +353,7 @@ function linkModules (
   pkg: ResolvedNode,
   deps: ResolvedNode[]
 ) {
-  if (pkg.independent) return Rx.Observable.empty()
+  if (pkg.independent) return Rx.Observable.of(undefined)
 
   return Rx.Observable.fromPromise(
     Promise.all(
