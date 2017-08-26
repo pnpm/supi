@@ -77,13 +77,11 @@ function getPackageIds (
   registry: string,
   packages: ResolvedPackages
 ): string[] {
-  return R.uniq(
-    R.keys(packages)
-      .map(depPath => {
-        if (packages[depPath].id) {
-          return packages[depPath].id
-        }
-        return dp.resolve(registry, depPath)
-      })
-  ) as string[]
+  return R.keys(packages)
+    .map(depPath => {
+      if (packages[depPath].id) {
+        return packages[depPath].id
+      }
+      return dp.resolve(registry, depPath)
+    }) as string[]
 }
