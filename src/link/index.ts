@@ -236,9 +236,10 @@ function linkNewPackages (
 ): Rx.Observable<string> {
   let copy = false
   const prevPackages = privateShrinkwrap.packages || {}
-  const parts = resolvedPkg$
-    .filter(resolvedPkg => resolvedPkg.node.installable)
-    .partition(resolvedPkg => {
+  const pkgToLink$ = resolvedPkg$
+    .filter(resolvedPkg => {
+      if (!resolvedPkg.node.installable) return false
+
       // TODO: what if the registries differ?
       if (!opts.force && prevPackages[resolvedPkg.dependencyPath]) {
         // add subdependencies that have been updated
@@ -246,14 +247,11 @@ function linkNewPackages (
         if (!(prevPackages[resolvedPkg.dependencyPath] &&
           (!R.equals(prevPackages[resolvedPkg.dependencyPath].dependencies, resolvedPkg.snapshot.dependencies) ||
           !R.equals(prevPackages[resolvedPkg.dependencyPath].optionalDependencies, resolvedPkg.snapshot.optionalDependencies)))) {
-          return true
+          return false
         }
       }
-      return false
+      return true
     })
-
-  const upToDatePkg$ = parts[0].map(resolvedPkg => ({resolvedPkg}))
-  const pkgToLink$ = parts[1]
 
   const linkedPkg$ = pkgToLink$
     .mergeMap(resolvedPkg => {
@@ -293,10 +291,14 @@ function linkNewPackages (
       if (!linkedPkg.dependenciesWithBins.length) return Rx.Observable.of(linkedPkg.resolvedPkg)
       return Rx.Observable.from(linkedPkg.dependenciesWithBins)
         .mergeMap(depWithBins => {
-          return linkedPkg$.merge(upToDatePkg$).find(_ => _.resolvedPkg.node.absolutePath === depWithBins.absolutePath)
+          return linkedPkg$
+            .map(_ => _.resolvedPkg.node)
+            .filter(resolvedNode => resolvedNode.absolutePath === depWithBins.absolutePath)
+            .concat(Rx.Observable.of(depWithBins))
+            .take(1)
         })
-        .mergeMap(_ => {
-          return _linkBins(linkedPkg.resolvedPkg.node, _.resolvedPkg.node)
+        .mergeMap(resolvedNode => {
+          return _linkBins(linkedPkg.resolvedPkg.node, resolvedNode)
         })
         .last()
         .mapTo(linkedPkg.resolvedPkg)
