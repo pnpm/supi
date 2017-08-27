@@ -104,7 +104,6 @@ export default async function (
     opts,
     opts.shrinkwrap.registry
   )
-  .shareReplay(Infinity)
 
   const updatedPkgsAbsolutePaths = await updatedPkgsAbsolutePaths$
     .toArray()

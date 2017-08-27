@@ -301,7 +301,7 @@ function resolvePeersOfChildren (
   return {
     externalPeer$: result.mergeMap(result => result.externalPeer$),
     partiallyResolvedChildContainer$: result.mergeMap(result => result.partiallyResolvedChildContainer$).shareReplay(Infinity),
-    partiallyResolvedNodeContainer$: result.mergeMap(result => result.partiallyResolvedNodeContainer$).shareReplay(Infinity),
+    partiallyResolvedNodeContainer$: result.mergeMap(result => result.partiallyResolvedNodeContainer$),
   }
 }
 

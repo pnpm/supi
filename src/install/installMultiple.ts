@@ -96,7 +96,6 @@ export default function installMultiple (
         )
       ).mergeAll())
     }, Rx.Observable.empty())
-    .shareReplay(Infinity)
 }
 
 function getInfoFromShrinkwrap (
