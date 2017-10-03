@@ -69,6 +69,7 @@ export default async function installMultiple (
     parentIsInstallable?: boolean,
     update: boolean,
     readPackageHook?: ReadPackageHook,
+    dryRun: boolean,
   }
 ): Promise<PkgAddress[]> {
   const resolvedDependencies = options.resolvedDependencies || {}
@@ -99,6 +100,7 @@ export default async function installMultiple (
               currentDepth: options.currentDepth,
               parentIsInstallable: options.parentIsInstallable,
               readPackageHook: options.readPackageHook,
+              dryRun: options.dryRun,
               update,
               proceed,
             },
@@ -205,6 +207,7 @@ async function install (
     update: boolean,
     proceed: boolean,
     readPackageHook?: ReadPackageHook,
+    dryRun: boolean,
   }
 ): Promise<PkgAddress | null> {
   const keypath = options.keypath || []
@@ -250,6 +253,7 @@ async function install (
     storeIndex: ctx.storeIndex,
     verifyStoreIntegrity: ctx.verifyStoreInegrity,
     downloadPriority: -options.currentDepth,
+    dryRun: options.dryRun,
   })
 
   if (fetchedPkg.isLocal) {
@@ -354,6 +358,7 @@ async function install (
           : undefined,
         update: options.update,
         readPackageHook: options.readPackageHook,
+        dryRun: options.dryRun,
       }
     )
     ctx.childrenIdsByParentId[fetchedPkg.id] = children.map(child => child.pkgId)
@@ -406,6 +411,7 @@ async function installDependencies (
     parentIsInstallable: boolean,
     update: boolean,
     readPackageHook?: ReadPackageHook,
+    dryRun: boolean,
   }
 ): Promise<PkgAddress[]> {
 

@@ -382,6 +382,7 @@ async function installInContext (
     parentNodeId: ':/:',
     currentDepth: 0,
     readPackageHook: opts.hooks.readPackage,
+    dryRun: opts.dryRun,
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     (spec: PackageSpec) => !spec.name || safeIsInnerLink(nodeModulesPath, spec.name, {storePath: ctx.storePath}))
@@ -485,6 +486,7 @@ async function installInContext (
     shrinkwrap: ctx.shrinkwrap,
     production: opts.production,
     optional: opts.optional,
+    dryRun: opts.dryRun,
     root: ctx.root,
     privateShrinkwrap: ctx.privateShrinkwrap,
     storePath: ctx.storePath,
@@ -509,7 +511,7 @@ async function installInContext (
   ])
 
   // postinstall hooks
-  if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length)) {
+  if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length) && !opts.dryRun) {
     const limitChild = pLimit(opts.childConcurrency)
     const linkedPkgsMapValues = R.values(result.linkedPkgsMap)
     await Promise.all(

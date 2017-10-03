@@ -49,6 +49,7 @@ const defaults = async (opts: PnpmOptions) => {
     verifyStoreIntegrity: true,
     hooks: {},
     savePrefix: '^',
+    dryRun: false,
   }
 }
 

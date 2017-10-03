@@ -43,6 +43,7 @@ export default async function (
     skipped: Set<string>,
     pkg: Package,
     independentLeaves: boolean,
+    dryRun: boolean,
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -58,14 +59,16 @@ export default async function (
   const pkgsToLink = await resolvePeers(tree, rootNodeIds, topPkgIds, opts.topParents, opts.independentLeaves, opts.baseNodeModules)
   const newShr = updateShrinkwrap(pkgsToLink, opts.shrinkwrap, opts.pkg)
 
-  await removeOrphanPkgs({
-    oldShrinkwrap: opts.privateShrinkwrap,
-    newShrinkwrap: newShr,
-    prefix: opts.root,
-    store: opts.storePath,
-    storeIndex: opts.storeIndex,
-    bin: opts.bin,
-  })
+  if (!opts.dryRun) {
+    await removeOrphanPkgs({
+      oldShrinkwrap: opts.privateShrinkwrap,
+      newShrinkwrap: newShr,
+      prefix: opts.root,
+      store: opts.storePath,
+      storeIndex: opts.storeIndex,
+      bin: opts.bin,
+    })
+  }
 
   let flatResolvedDeps =  R.values(pkgsToLink).filter(dep => !opts.skipped.has(dep.id))
   if (opts.production) {
@@ -87,26 +90,28 @@ export default async function (
     opts
   )
 
-  for (let pkg of flatResolvedDeps.filter(pkg => pkg.depth === 0)) {
-    const symlinkingResult = await symlinkDependencyTo(pkg, opts.baseNodeModules)
-    if (!symlinkingResult.reused) {
-      const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
-      const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
-      rootLogger.info({
-        added: {
-          id: pkg.id,
-          name: pkg.name,
-          version: pkg.version,
-          dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
-        },
+  if (!opts.dryRun) {
+    for (let pkg of flatResolvedDeps.filter(pkg => pkg.depth === 0)) {
+      const symlinkingResult = await symlinkDependencyTo(pkg, opts.baseNodeModules)
+      if (!symlinkingResult.reused) {
+        const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
+        const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
+        rootLogger.info({
+          added: {
+            id: pkg.id,
+            name: pkg.name,
+            version: pkg.version,
+            dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
+          },
+        })
+      }
+      logStatus({
+        status: 'installed',
+        pkgId: pkg.id,
       })
     }
-    logStatus({
-      status: 'installed',
-      pkgId: pkg.id,
-    })
+    await linkBins(opts.baseNodeModules, opts.bin)
   }
-  await linkBins(opts.baseNodeModules, opts.bin)
 
   let privateShrinkwrap: Shrinkwrap
   if (opts.makePartialPrivateShrinkwrap) {
@@ -167,6 +172,7 @@ async function linkNewPackages (
     global: boolean,
     baseNodeModules: string,
     optional: boolean,
+    dryRun: boolean,
   }
 ): Promise<string[]> {
   const nextPkgResolvedIds = R.keys(shrinkwrap.packages)
@@ -182,6 +188,8 @@ async function linkNewPackages (
     // when installing a new package, not all the nodes are analyzed
     // just skip the ones that are in the lockfile but were not analyzed
     .filter(resolvedId => pkgsToLink[resolvedId])
+
+  if (opts.dryRun) return newPkgResolvedIds
 
   const newPkgs = R.props<DependencyTreeNode>(newPkgResolvedIds, pkgsToLink)
 

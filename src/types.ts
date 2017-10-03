@@ -25,6 +25,7 @@ export type PnpmOptions = {
   offline?: boolean,
   registry?: string,
   optional?: boolean,
+  dryRun?: boolean,
 
   // proxy
   proxy?: string,
@@ -94,6 +95,7 @@ export type StrictPnpmOptions = PnpmOptions & {
   offline: boolean,
   registry: string,
   optional: boolean,
+  dryRun: boolean,
 
   // proxy
   proxy?: string,
