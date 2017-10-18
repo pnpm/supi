@@ -474,7 +474,7 @@ async function installInContext (
         const spec = R.find(spec => spec.raw === dep.specRaw, newSpecs)
         if (!spec) return null
         return {
-          name: dep.name,
+          name: spec.name || dep.name,
           saveSpec: getSaveSpec(spec, dep.version, {
             saveExact: opts.saveExact,
             savePrefix: opts.savePrefix,
