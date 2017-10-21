@@ -49,9 +49,9 @@ export default async function (
     baseNodeModules: string,
     bin: string,
     topParent$: Rx.Observable<{name: string, version: string}>,
-    shrinkwrap: Shrinkwrap,
-    privateShrinkwrap: Shrinkwrap,
-    makePartialPrivateShrinkwrap: boolean,
+    wantedShrinkwrap: Shrinkwrap,
+    currentShrinkwrap: Shrinkwrap,
+    makePartialCurrentShrinkwrap: boolean,
     production: boolean,
     optional: boolean,
     root: string,
@@ -76,8 +76,8 @@ export default async function (
   }
 ): Promise<{
   resolvedNodesMap: Map<ResolvedNode>,
-  shrinkwrap: Shrinkwrap,
-  privateShrinkwrap: Shrinkwrap,
+  wantedShrinkwrap: Shrinkwrap,
+  currentShrinkwrap: Shrinkwrap,
   updatedPkgsAbsolutePaths: string[],
 }> {
   // TODO: decide what kind of logging should be here.
@@ -102,7 +102,7 @@ export default async function (
     next: () => {},
     complete: () => stageLogger.debug('resolution_done'),
   })
-  const depShr$ = updateShrinkwrap(resolvedNode$, opts.shrinkwrap, opts.pkg)
+  const depShr$ = updateShrinkwrap(resolvedNode$, opts.wantedShrinkwrap, opts.pkg)
 
   const filterOpts = {
     noDev: opts.production,
@@ -111,22 +111,22 @@ export default async function (
   }
 
   const updatedPkgsAbsolutePaths$ = linkNewPackages(
-    filterShrinkwrap(opts.privateShrinkwrap, filterOpts),
+    filterShrinkwrap(opts.currentShrinkwrap, filterOpts),
     depShr$,
     opts,
     filterOpts,
-    opts.shrinkwrap.registry
+    opts.wantedShrinkwrap.registry
   )
 
   const updatedPkgsAbsolutePaths = await updatedPkgsAbsolutePaths$
     .toArray()
     .toPromise()
 
-  const shrPackages = opts.shrinkwrap.packages || {}
+  const shrPackages = opts.wantedShrinkwrap.packages || {}
   await depShr$.forEach(depShr => {
     shrPackages[depShr.dependencyPath] = depShr.snapshot
   })
-  opts.shrinkwrap.packages = shrPackages
+  opts.wantedShrinkwrap.packages = shrPackages
 
   const rootResolvedNodes = await rootResolvedNode$
     .toArray()
@@ -140,7 +140,7 @@ export default async function (
     dev: boolean,
     optional: boolean,
   }[]).concat(opts.localPackages)
-  syncShrinkwrapWithManifest(opts.shrinkwrap, opts.pkg,
+  syncShrinkwrapWithManifest(opts.wantedShrinkwrap, opts.pkg,
     pkgsToSave.map(resolvedNode => ({
       optional: resolvedNode.optional,
       dev: resolvedNode.dev,
@@ -149,11 +149,11 @@ export default async function (
       resolution: resolvedNode.resolution,
     })))
 
-  const newShr = pruneShrinkwrap(opts.shrinkwrap, opts.pkg)
+  const newShr = pruneShrinkwrap(opts.wantedShrinkwrap, opts.pkg)
 
   const waitq: Promise<{} | void>[] = []
   waitq.push(removeOrphanPkgs({
-    oldShrinkwrap: opts.privateShrinkwrap,
+    oldShrinkwrap: opts.currentShrinkwrap,
     newShrinkwrap: newShr,
     prefix: opts.root,
     store: opts.storePath,
@@ -213,9 +213,9 @@ export default async function (
     // `shrinkwrapVersion` field allows numbers like 4.1
     newShr.shrinkwrapMinorVersion = 1
   }
-  let privateShrinkwrap: Shrinkwrap
-  if (opts.makePartialPrivateShrinkwrap) {
-    const packages = opts.privateShrinkwrap.packages || {}
+  let currentShrinkwrap: Shrinkwrap
+  if (opts.makePartialCurrentShrinkwrap) {
+    const packages = opts.currentShrinkwrap.packages || {}
     if (newShr.packages) {
       for (const shortId in newShr.packages) {
         const resolvedId = dp.resolve(newShr.registry, shortId)
@@ -224,17 +224,17 @@ export default async function (
         }
       }
     }
-    privateShrinkwrap = Object.assign({}, newShr, {
+    currentShrinkwrap = Object.assign({}, newShr, {
       packages,
     })
   } else {
-    privateShrinkwrap = newShr
+    currentShrinkwrap = newShr
   }
 
   return {
     resolvedNodesMap,
-    shrinkwrap: newShr,
-    privateShrinkwrap,
+    wantedShrinkwrap: newShr,
+    currentShrinkwrap,
     updatedPkgsAbsolutePaths,
   }
 }
@@ -264,7 +264,7 @@ function filterShrinkwrap (
 }
 
 function linkNewPackages (
-  privateShrinkwrap: Shrinkwrap,
+  currentShrinkwrap: Shrinkwrap,
   resolvedPkg$: Rx.Observable<DependencyShrinkwrapContainer>,
   opts: {
     force: boolean,
@@ -280,7 +280,7 @@ function linkNewPackages (
   registry: string
 ): Rx.Observable<string> {
   let copy = false
-  const prevPackages = privateShrinkwrap.packages || {}
+  const prevPackages = currentShrinkwrap.packages || {}
   const outOfDateResolvedPkg$ = resolvedPkg$
     .filter(resolvedPkg => {
       if (filterOpts.noDev && resolvedPkg.node.dev) return false

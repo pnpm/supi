@@ -79,8 +79,8 @@ export type InstallContext = {
     name: string,
     specRaw: string,
   }[],
-  shrinkwrap: Shrinkwrap,
-  privateShrinkwrap: Shrinkwrap,
+  wantedShrinkwrap: Shrinkwrap,
+  currentShrinkwrap: Shrinkwrap,
   fetchingLocker: {
     [pkgId: string]: {
       fetchingFiles: Promise<PackageContentInfo>,
@@ -138,15 +138,15 @@ export async function install (maybeOpts?: PnpmOptions) {
       prefix: opts.prefix,
     })
 
-    if (ctx.shrinkwrap.specifiers) {
-      ctx.shrinkwrap.dependencies = ctx.shrinkwrap.dependencies || {}
-      ctx.shrinkwrap.devDependencies = ctx.shrinkwrap.devDependencies || {}
-      ctx.shrinkwrap.optionalDependencies = ctx.shrinkwrap.optionalDependencies || {}
+    if (ctx.wantedShrinkwrap.specifiers) {
+      ctx.wantedShrinkwrap.dependencies = ctx.wantedShrinkwrap.dependencies || {}
+      ctx.wantedShrinkwrap.devDependencies = ctx.wantedShrinkwrap.devDependencies || {}
+      ctx.wantedShrinkwrap.optionalDependencies = ctx.wantedShrinkwrap.optionalDependencies || {}
       for (const spec of specs) {
-        if (ctx.shrinkwrap.specifiers[spec.name] !== spec.rawSpec) {
-          delete ctx.shrinkwrap.dependencies[spec.name]
-          delete ctx.shrinkwrap.devDependencies[spec.name]
-          delete ctx.shrinkwrap.optionalDependencies[spec.name]
+        if (ctx.wantedShrinkwrap.specifiers[spec.name] !== spec.rawSpec) {
+          delete ctx.wantedShrinkwrap.dependencies[spec.name]
+          delete ctx.wantedShrinkwrap.devDependencies[spec.name]
+          delete ctx.wantedShrinkwrap.optionalDependencies[spec.name]
         }
       }
     }
@@ -320,11 +320,11 @@ async function installInContext (
 ) {
   // Unfortunately, the private shrinkwrap file may differ from the public one.
   // A user might run named installations on a project that has a shrinkwrap.yaml file before running a noop install
-  const makePartialPrivateShrinkwrap = installType === 'named' && (
-    ctx.existsPublicShrinkwrap && !ctx.existsPrivateShrinkwrap ||
+  const makePartialCurrentShrinkwrap = installType === 'named' && (
+    ctx.existsWantedShrinkwrap && !ctx.existsCurrentShrinkwrap ||
     // TODO: this operation is quite expensive. We'll have to find a better solution to do this.
     // maybe in pnpm v2 it won't be needed. See: https://github.com/pnpm/pnpm/issues/841
-    !shrinkwrapsEqual(ctx.privateShrinkwrap, ctx.shrinkwrap)
+    !shrinkwrapsEqual(ctx.currentShrinkwrap, ctx.wantedShrinkwrap)
   )
 
   const nodeModulesPath = path.join(ctx.root, 'node_modules')
@@ -336,19 +336,19 @@ async function installInContext (
 
   // This works from minor version 1, so any number is fine
   // also, the shrinkwrapMinorVersion is going to be removed from shrinkwrap v4
-  const hasManifestInShrinkwrap = typeof ctx.shrinkwrap.shrinkwrapMinorVersion === 'number'
+  const hasManifestInShrinkwrap = typeof ctx.wantedShrinkwrap.shrinkwrapMinorVersion === 'number'
 
   const installCtx: InstallContext = {
     installs: {},
     localPackages: [],
-    shrinkwrap: ctx.shrinkwrap,
-    privateShrinkwrap: ctx.privateShrinkwrap,
+    wantedShrinkwrap: ctx.wantedShrinkwrap,
+    currentShrinkwrap: ctx.currentShrinkwrap,
     fetchingLocker: {},
     skipped: ctx.skipped,
     tree: {},
     storeIndex: ctx.storeIndex,
     storePath: ctx.storePath,
-    registry: ctx.shrinkwrap.registry,
+    registry: ctx.wantedShrinkwrap.registry,
     force: opts.force,
     depth: (function () {
       // This can be remove from shrinkwrap v4
@@ -360,7 +360,7 @@ async function installInContext (
       if (opts.update) {
         return opts.depth
       }
-      if (R.equals(ctx.shrinkwrap.packages, ctx.privateShrinkwrap.packages)) {
+      if (R.equals(ctx.wantedShrinkwrap.packages, ctx.currentShrinkwrap.packages)) {
         return opts.repeatInstallDepth
        }
        return Infinity
@@ -390,7 +390,7 @@ async function installInContext (
   }
   const installOpts = {
     root: ctx.root,
-    resolvedDependencies: Object.assign({}, ctx.shrinkwrap.devDependencies, ctx.shrinkwrap.dependencies, ctx.shrinkwrap.optionalDependencies),
+    resolvedDependencies: Object.assign({}, ctx.wantedShrinkwrap.devDependencies, ctx.wantedShrinkwrap.dependencies, ctx.wantedShrinkwrap.optionalDependencies),
     update: opts.update,
     keypath: [],
     parentNodeId: ':/:',
@@ -469,26 +469,26 @@ async function installInContext (
       ? getTopParent$(
           R.difference(R.keys(depsFromPackage(ctx.pkg)), newPkgs), nodeModulesPath)
       : Rx.Observable.empty(),
-    shrinkwrap: ctx.shrinkwrap,
+    wantedShrinkwrap: ctx.wantedShrinkwrap,
     production: opts.production,
     optional: opts.optional,
     root: ctx.root,
-    privateShrinkwrap: ctx.privateShrinkwrap,
+    currentShrinkwrap: ctx.currentShrinkwrap,
     storePath: ctx.storePath,
     skipped: ctx.skipped,
     pkg: newPkg || ctx.pkg,
     independentLeaves: opts.independentLeaves,
     storeIndex: ctx.storeIndex,
-    makePartialPrivateShrinkwrap,
+    makePartialCurrentShrinkwrap,
     nonDevPackageIds: installCtx.nonDevPackageIds,
     nonOptionalPackageIds: installCtx.nonOptionalPackageIds,
     localPackages: installCtx.localPackages,
-    updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.privateShrinkwrap.packages),
+    updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
   })
 
   await Promise.all([
-    saveShrinkwrap(ctx.root, result.shrinkwrap, result.privateShrinkwrap),
-    result.privateShrinkwrap.packages === undefined
+    saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
+    result.currentShrinkwrap.packages === undefined
       ? Promise.resolve()
       : saveModules(path.join(ctx.root, 'node_modules'), {
         packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
