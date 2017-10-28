@@ -61,7 +61,6 @@ export default async function (
     skipped: Set<string>,
     pkg: Package,
     independentLeaves: boolean,
-    nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
     localPackages: {
       optional: boolean,
@@ -91,7 +90,6 @@ export default async function (
     opts.topParent$,
     opts.independentLeaves,
     opts.baseNodeModules, {
-      nonDevPackageIds: opts.nonDevPackageIds,
       nonOptionalPackageIds: opts.nonOptionalPackageIds,
     })
 
@@ -165,10 +163,10 @@ export default async function (
 
   let wantedRootResolvedNode$ = rootResolvedNode$.filter(dep => !opts.skipped.has(dep.pkgId))
   if (!opts.production) {
-    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev || dep.optional)
+    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev !== false || dep.optional)
   }
   if (!opts.development) {
-    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.dev)
+    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev === false)
   }
   if (!opts.optional) {
     wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.optional)
@@ -216,7 +214,7 @@ export default async function (
     // have new backward-compatible versions of `shrinkwrap.yaml`
     // w/o changing `shrinkwrapVersion`. From version 4, the
     // `shrinkwrapVersion` field allows numbers like 4.1
-    newShr.shrinkwrapMinorVersion = 1
+    newShr.shrinkwrapMinorVersion = 2
   }
   let currentShrinkwrap: Shrinkwrap
   if (opts.makePartialCurrentShrinkwrap) {
@@ -256,10 +254,10 @@ function filterShrinkwrap (
   let pairs = R.toPairs<string, DependencyShrinkwrap>(shr.packages || {})
     .filter(pair => !opts.skipped.has(pair[1].id || dp.resolve(shr.registry, pair[0])))
   if (opts.noProd) {
-    pairs = pairs.filter(pair => pair[1].dev || pair[1].optional)
+    pairs = pairs.filter(pair => pair[1].dev !== false || pair[1].optional)
   }
   if (opts.noDev) {
-    pairs = pairs.filter(pair => !pair[1].dev)
+    pairs = pairs.filter(pair => pair[1].dev === false)
   }
   if (opts.noOptional) {
     pairs = pairs.filter(pair => !pair[1].optional)

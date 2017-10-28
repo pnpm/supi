@@ -44,6 +44,8 @@ export type PackageRequest = {
 export type InstalledPackage = {
   id: string,
   resolution: Resolution,
+  prod: boolean,
+  dev: boolean,
   fetchingFiles: Promise<PackageContentInfo>,
   calculatingIntegrity: Promise<void>,
   path: string,
@@ -349,9 +351,6 @@ async function install (
   if (!spec.optional) {
     ctx.nonOptionalPackageIds.add(fetchedPkg.id)
   }
-  if (!spec.dev) {
-    ctx.nonDevPackageIds.add(fetchedPkg.id)
-  }
   if (!ctx.processed.has(fetchedPkg.id)) {
     ctx.processed.add(fetchedPkg.id)
     if (!installable) {
@@ -398,6 +397,8 @@ async function install (
       childrenCount: installDepsResult.directChildrenCount,
       children$: installDepsResult.children$.map(child => child.pkgId),
       installable: currentIsInstallable,
+      prod: !spec.dev && !spec.optional,
+      dev: spec.dev,
       pkg,
     }
 

@@ -55,6 +55,7 @@ export default function (
             registry: shrinkwrap.registry,
             prevResolvedDeps: packages[dependencyPath] && packages[dependencyPath].dependencies || {},
             prevResolvedOptionalDeps: packages[dependencyPath] && packages[dependencyPath].optionalDependencies || {},
+            prod: resolvedNode.prod,
             dev: resolvedNode.dev,
             optional: resolvedNode.optional,
           })
@@ -78,6 +79,7 @@ function toShrDependency (
     updatedOptionalDeps: ResolvedNode[],
     prevResolvedDeps: ResolvedDependencies,
     prevResolvedOptionalDeps: ResolvedDependencies,
+    prod: boolean,
     dev: boolean,
     optional: boolean,
   }
@@ -103,8 +105,10 @@ function toShrDependency (
   if (!R.isEmpty(newResolvedOptionalDeps)) {
     result['optionalDependencies'] = newResolvedOptionalDeps
   }
-  if (opts.dev) {
+  if (opts.dev && !opts.prod) {
     result['dev'] = true
+  } else if (opts.prod && !opts.dev) {
+    result['dev'] = false
   }
   if (opts.optional) {
     result['optional'] = true

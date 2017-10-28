@@ -106,7 +106,6 @@ export type InstallContext = {
   rawNpmConfig: Object,
   nodeModules: string,
   verifyStoreInegrity: boolean,
-  nonDevPackageIds: Set<string>,
   nonOptionalPackageIds: Set<string>,
 }
 
@@ -384,7 +383,6 @@ async function installInContext (
       maxTimeout: opts.fetchRetryMaxtimeout,
       minTimeout: opts.fetchRetryMintimeout,
     }),
-    nonDevPackageIds: new Set(),
     nonOptionalPackageIds: new Set(),
     processed: new Set(),
   }
@@ -481,7 +479,6 @@ async function installInContext (
     independentLeaves: opts.independentLeaves,
     storeIndex: ctx.storeIndex,
     makePartialCurrentShrinkwrap,
-    nonDevPackageIds: installCtx.nonDevPackageIds,
     nonOptionalPackageIds: installCtx.nonOptionalPackageIds,
     localPackages: installCtx.localPackages,
     updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),

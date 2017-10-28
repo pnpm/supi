@@ -41,6 +41,7 @@ export type ResolvedNode = {
   optionalDependencies: Set<string>,
   depth: number,
   absolutePath: string,
+  prod: boolean,
   dev: boolean,
   optional: boolean,
   pkgId: string,
@@ -66,7 +67,6 @@ export default function (
   independentLeaves: boolean,
   nodeModules: string,
   opts: {
-    nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
   }
 ): {
@@ -89,7 +89,6 @@ export default function (
     partiallyResolvedNodeMap: {},
     independentLeaves,
     nodeModules,
-    nonDevPackageIds: opts.nonDevPackageIds,
     nonOptionalPackageIds: opts.nonOptionalPackageIds,
   })
 
@@ -138,7 +137,6 @@ function resolvePeersOfNode (
     partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
-    nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
     purePkgs: Set<string>, // pure packages are those that don't rely on externally resolved peers
   }
@@ -196,7 +194,6 @@ function resolveNode (
     partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
-    nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
     purePkgs: Set<string>,
   },
@@ -254,7 +251,8 @@ function resolveNode (
     peerNodeIds$: ownExternalPeer$,
     depth: node.depth,
     absolutePath,
-    dev: !ctx.nonDevPackageIds.has(node.pkg.id),
+    prod: node.pkg.prod,
+    dev: node.pkg.dev,
     optional: !ctx.nonOptionalPackageIds.has(node.pkg.id),
     pkgId: node.pkg.id,
     installable: node.installable,
@@ -281,7 +279,6 @@ function resolvePeersOfChildren (
     partiallyResolvedNodeMap: Map<PartiallyResolvedNode>,
     independentLeaves: boolean,
     nodeModules: string,
-    nonDevPackageIds: Set<string>,
     nonOptionalPackageIds: Set<string>,
     purePkgs: Set<string>,
   }
