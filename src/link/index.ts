@@ -166,7 +166,7 @@ export default async function (
     wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev !== false || dep.optional)
   }
   if (!opts.development) {
-    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev === false)
+    wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => dep.dev !== true)
   }
   if (!opts.optional) {
     wantedRootResolvedNode$ = wantedRootResolvedNode$.filter(dep => !dep.optional)
@@ -259,7 +259,7 @@ function filterShrinkwrap (
     pairs = pairs.filter(pair => pair[1].dev !== false || pair[1].optional)
   }
   if (opts.noDev) {
-    pairs = pairs.filter(pair => pair[1].dev === false)
+    pairs = pairs.filter(pair => pair[1].dev !== true)
   }
   if (opts.noOptional) {
     pairs = pairs.filter(pair => !pair[1].optional)
