@@ -153,7 +153,7 @@
     "test:tap": "ts-node test",
     "test:e2e": "npm-run-all -p -r pnpm-registry-mock test:tap",
     "pretest": "rimraf ../.tmp/ && pnpm-registry-mock prepare && package-preview",
-    "test": "npm run lint && npm run test:e2e",
+    "test": "ls node_modules && npm run lint && npm run test:e2e",
     "tsc": "rimraf lib && tsc",
     "prepublishOnly": "npm run tsc"
   },
