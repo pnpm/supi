@@ -17,6 +17,7 @@ module.exports = {
       e2e: npsUtils.concurrent.nps('pnpm-registry-mock', 'test.tap'),
       default: 'nps pretest && nps lint && nps test.e2e'
     },
-    tsc: 'rimraf lib && tsc'
+    tsc: 'rimraf lib && tsc',
+    prepublishOnly: 'npm run tsc'
   }
 }
