@@ -13,7 +13,7 @@ install:
 script:
   - /bin/bash lint-commits.sh
   - ./node_modules/.bin/commitlint --from=$TRAVIS_COMMIT
-  - pnpx nps tsc
+  - npm run tsc
   - npm test
 env:
   global:
