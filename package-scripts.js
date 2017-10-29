@@ -15,7 +15,7 @@ module.exports = {
     test: {
       tap: 'ts-node --fast --no-cache --cache-directory ./ts-cache test',
       e2e: npsUtils.concurrent.nps('pnpm-registry-mock', 'test.tap'),
-      default: 'nps pretest && nps lint && nps test.e2e'
+      default: 'nps pretest && nps test.e2e'
     },
     tsc: 'rimraf lib && tsc',
     prepublishOnly: 'npm run tsc'
