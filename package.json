@@ -92,8 +92,8 @@
     "exists-link": "^2.0.0",
     "isexe": "^2.0.0",
     "mkdirp": "^0.5.1",
-    "npm-run-all": "^4.0.1",
-    "npm-scripts-info": "^0.3.6",
+    "nps": "^5.7.1",
+    "nps-utils": "^1.5.0",
     "package-preview": "^0.1.0",
     "pnpm-logger": "^0.6.2",
     "pnpm-registry-mock": "^1.10.0",
@@ -143,19 +143,10 @@
     "url": "git+https://github.com/pnpm/supi.git"
   },
   "scripts": {
-    "info": "npm-scripts-info",
-    "start": "npm run tsc -- --watch",
-    "?commit": "echo 'Run Git commit wizard'",
-    "commit": "commit",
+    "start": "nps",
+    "test": "nps test",
     "commitmsg": "commitlint -e",
-    "lint": "tslint -c tslint.json --project .",
-    "pnpm-registry-mock": "pnpm-registry-mock",
-    "test:tap": "ts-node test",
-    "test:e2e": "npm-run-all -p -r pnpm-registry-mock test:tap",
-    "pretest": "rimraf ../.tmp/ && pnpm-registry-mock prepare && package-preview",
-    "test": "ls node_modules && npm run lint && npm run test:e2e",
-    "tsc": "rimraf lib && tsc",
-    "prepublishOnly": "npm run tsc"
+    "prepublishOnly": "nps prepublishOnly"
   },
   "greenkeeper": {
     "ignore": [
