@@ -13,7 +13,7 @@ module.exports = {
     pnpmRegistryMock: 'pnpm-registry-mock',
     pretest: 'rimraf ../.tmp/ && pnpm-registry-mock prepare && preview',
     test: {
-      tap: 'ts-node test',
+      tap: 'ts-node --no-cache test',
       e2e: npsUtils.concurrent.nps('pnpm-registry-mock', 'test.tap'),
       default: 'nps pretest && nps lint && nps test.e2e'
     },
