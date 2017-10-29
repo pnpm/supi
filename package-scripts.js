@@ -3,7 +3,6 @@ const npsUtils = require('nps-utils')
 
 module.exports = {
   scripts: {
-    info: 'npm-scripts-info',
     default: 'nps "tsc --watch"',
     commit: {
       description: "Run Git commit wizard",
@@ -11,7 +10,7 @@ module.exports = {
     },
     lint: 'tslint -c tslint.json --project .',
     pnpmRegistryMock: 'pnpm-registry-mock',
-    pretest: 'rimraf ../.tmp/ && pnpm-registry-mock prepare && preview',
+    pretest: 'rimraf ../.tmp/ && pnpm-registry-mock prepare && preview && preview',
     test: {
       tap: 'ts-node --fast --no-cache --cache-directory ./ts-cache test',
       e2e: npsUtils.concurrent.nps('pnpm-registry-mock', 'test.tap'),
