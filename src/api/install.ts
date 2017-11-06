@@ -1,3 +1,7 @@
+import {
+  Dependencies,
+  PackageJson,
+} from '@pnpm/types'
 import path = require('path')
 import RegClient = require('npm-registry-client')
 import logger, {
@@ -11,7 +15,7 @@ import pFilter = require('p-filter')
 import R = require('ramda')
 import safeIsInnerLink from '../safeIsInnerLink'
 import {fromDir as safeReadPkgFromDir} from '../fs/safeReadPkg'
-import {PnpmOptions, StrictPnpmOptions, Dependencies} from '../types'
+import {PnpmOptions, StrictPnpmOptions} from '../types'
 import getContext, {PnpmContext} from './getContext'
 import installMultiple, {InstalledPackage, PackageRequest} from '../install/installMultiple'
 import externalLink from './link'
@@ -32,7 +36,6 @@ import {
 } from '../fs/modulesController'
 import mkdirp = require('mkdirp-promise')
 import createMemoize, {MemoizedFunc} from '../memoize'
-import {Package} from '../types'
 import {ResolvedNode} from '../link/resolvePeers'
 import depsToSpecs, {similarDepsToSpecs} from '../depsToSpecs'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
@@ -84,7 +87,7 @@ export type InstallContext = {
   fetchingLocker: {
     [pkgId: string]: {
       fetchingFiles: Promise<PackageContentInfo>,
-      fetchingPkg: Promise<Package>,
+      fetchingPkg: Promise<PackageJson>,
       calculatingIntegrity: Promise<void>,
     },
   },
@@ -198,7 +201,7 @@ export async function install (maybeOpts?: PnpmOptions) {
 }
 
 function specsToInstallFromPackage(
-  pkg: Package,
+  pkg: PackageJson,
   opts: {
     prefix: string,
   }
@@ -438,7 +441,7 @@ async function installInContext (
   }, {})
   .toPromise()
 
-  let newPkg: Package | undefined = ctx.pkg
+  let newPkg: PackageJson | undefined = ctx.pkg
   if (installType === 'named') {
     if (!ctx.pkg) {
       throw new Error('Cannot save because no package.json found')
@@ -590,7 +593,7 @@ function getTopParent$ (
     .map(pkgName => path.join(modules, pkgName))
     .mergeMap(pkgPath => Rx.Observable.fromPromise(safeReadPkgFromDir(pkgPath)))
     .filter(Boolean)
-    .map((pkg: Package) => ({
+    .map((pkg: PackageJson) => ({
       name: pkg.name,
       version: pkg.version,
     }))

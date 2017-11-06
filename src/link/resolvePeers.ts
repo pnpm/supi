@@ -3,7 +3,7 @@ import {
   PackageContentInfo,
   pkgIdToFilename,
 } from 'package-store'
-import {Dependencies, Package} from '../types'
+import {Dependencies} from '@pnpm/types'
 import R = require('ramda')
 import semver = require('semver')
 import logger from 'pnpm-logger'
@@ -11,6 +11,7 @@ import path = require('path')
 import {InstalledPackage} from '../install/installMultiple'
 import {TreeNode, TreeNodeMap} from '../api/install'
 import Rx = require('@reactivex/rxjs/dist/package/Rx')
+import {PackageManifest} from '../types'
 
 type PartiallyResolvedNodeContainer = {
   // a node ID is the join of the package's keypath with a colon
@@ -46,7 +47,7 @@ export type ResolvedNode = {
   optional: boolean,
   pkgId: string,
   installable: boolean,
-  pkg: Package,
+  pkg: PackageManifest,
 }
 
 // All the direct children are resolved but the peer dependencies are not

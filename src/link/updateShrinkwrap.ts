@@ -10,7 +10,8 @@ import {ResolvedNode} from './resolvePeers'
 import {Resolution} from 'package-store'
 import R = require('ramda')
 import Rx = require('@reactivex/rxjs/dist/package/Rx')
-import {Package} from '../types'
+import {PackageJson} from '@pnpm/types'
+import {PackageManifest} from '../types'
 
 export type DependencyShrinkwrapContainer = {
   dependencyPath: string,
@@ -23,7 +24,7 @@ export type DependencyShrinkwrapContainer = {
 export default function (
   resolvedNode$: Rx.Observable<ResolvedNode>,
   shrinkwrap: Shrinkwrap,
-  pkg: Package
+  pkg: PackageJson
 ): Rx.Observable<DependencyShrinkwrapContainer> {
   const packages = shrinkwrap.packages || {}
   return resolvedNode$.mergeMap(resolvedNode => {
@@ -66,7 +67,7 @@ export default function (
 }
 
 function toShrDependency (
-  pkg: Package,
+  pkg: PackageManifest,
   opts: {
     dependencyAbsolutePath: string,
     name: string,

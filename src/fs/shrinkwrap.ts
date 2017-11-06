@@ -1,11 +1,11 @@
 import {Resolution} from 'package-store'
 import encodeRegistry = require('encode-registry')
 import {Shrinkwrap} from 'pnpm-shrinkwrap'
-import {Package} from '../types'
+import {PackageJson} from '@pnpm/types'
 
 export function syncShrinkwrapWithManifest (
   shrinkwrap: Shrinkwrap,
-  pkg: Package,
+  pkg: PackageJson,
   pkgsToSave: {
     optional: boolean,
     dev: boolean,

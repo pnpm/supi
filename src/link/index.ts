@@ -11,7 +11,7 @@ import pLimit = require('p-limit')
 import {InstalledPackage} from '../install/installMultiple'
 import {InstalledPackages, TreeNode} from '../api/install'
 import linkBins, {linkPkgBins} from './linkBins'
-import {Package, Dependencies} from '../types'
+import {PackageJson, Dependencies} from '@pnpm/types'
 import {
   Resolution,
   PackageContentInfo,
@@ -59,7 +59,7 @@ export default async function (
     storePath: string,
     storeIndex: Store,
     skipped: Set<string>,
-    pkg: Package,
+    pkg: PackageJson,
     independentLeaves: boolean,
     nonOptionalPackageIds: Set<string>,
     localPackages: {
