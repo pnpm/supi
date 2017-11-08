@@ -2,10 +2,7 @@ import fs = require('mz/fs')
 import path = require('path')
 import symlinkDir = require('symlink-dir')
 import exists = require('path-exists')
-import logger, {
-  rootLogger,
-  stageLogger,
-} from 'pnpm-logger'
+import logger from 'pnpm-logger'
 import R = require('ramda')
 import pLimit = require('p-limit')
 import {InstalledPackage} from '../install/installMultiple'
@@ -33,6 +30,10 @@ import ncpCB = require('ncp')
 import thenify = require('thenify')
 import Rx = require('@reactivex/rxjs/dist/package/Rx')
 import {syncShrinkwrapWithManifest} from '../fs/shrinkwrap'
+import {
+  rootLogger,
+  stageLogger,
+} from '../loggers'
 
 const ncp = thenify(ncpCB)
 

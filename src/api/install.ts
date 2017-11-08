@@ -6,8 +6,10 @@ import path = require('path')
 import RegClient = require('npm-registry-client')
 import logger, {
   streamParser,
-  summaryLogger,
 } from 'pnpm-logger'
+import {
+  summaryLogger,
+} from '../loggers'
 import logStatus from '../logging/logInstallStatus'
 import pLimit = require('p-limit')
 import npa = require('npm-package-arg')
