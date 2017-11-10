@@ -48,7 +48,7 @@ dependencies:
   path-exists: 3.0.0
   path-name: 1.0.0
   pnpm-install-checks: 1.1.0
-  pnpm-shrinkwrap: 4.0.1
+  pnpm-shrinkwrap: 5.0.0
   proper-lockfile: 2.0.1
   ramda: 0.25.0
   read-package-json: 2.0.12
@@ -63,6 +63,7 @@ devDependencies:
   '@commitlint/cli': 4.3.0
   '@commitlint/config-angular': 4.3.0
   '@commitlint/prompt-cli': 4.3.0
+  '@pnpm/logger': 1.0.0
   '@types/mkdirp': 0.5.1
   '@types/sinon': 2.3.7
   '@types/tape': 4.2.31
@@ -76,7 +77,6 @@ devDependencies:
   npm-run-all: 4.1.2
   npm-scripts-info: 0.3.6
   package-preview: 0.2.3
-  pnpm-logger: 0.7.1
   pnpm-registry-mock: 1.10.0
   read-pkg: 2.0.0
   rimraf: 2.6.2
@@ -186,6 +186,16 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-1C2K+SXmyKqwojtk9EhLsN6sKDhLnJJfenUwkfcBBbP3ltDaIExZ8uEpCFE4cO2qK60dNgJYTF7FsPzJjYyx5w==
+  /@pnpm/logger/1.0.0:
+    dependencies:
+      '@types/node': 8.0.51
+      bole: 3.0.2
+      ndjson: 1.5.0
+    dev: true
+    engines:
+      node: '>=4'
+    resolution:
+      integrity: sha512-VRqE5/SiuR7ZrwBmS+Af89BTXli5xBbiqu7WPq56gEtWT8dKf9rFLoimmmMBVeRq5LmVZIXlOxs29F9I+vgSvQ==
   /@pnpm/types/1.0.0:
     dev: false
     resolution:
@@ -3097,16 +3107,6 @@ packages:
     dev: false
     resolution:
       integrity: sha1-dB2ZeXYv362T8+Rp3rSoFNNDAAg=
-  /pnpm-logger/0.7.1:
-    dependencies:
-      '@types/node': 8.0.51
-      bole: 3.0.2
-      ndjson: 1.5.0
-    dev: true
-    engines:
-      node: '>=4'
-    resolution:
-      integrity: sha512-CXm+ueCzJkRFok4t7P6eu8Lg8QKKXu36zBMBkTYRdGWmJydEMDVODRjxVeS2o7lLGFDI48n++A59QlGzJiTrLg==
   /pnpm-registry-mock/1.10.0:
     dependencies:
       cpr: 2.2.0
@@ -3115,7 +3115,7 @@ packages:
     dev: true
     resolution:
       integrity: sha512-UJZ5BQspvp1kU+LTaWHKXKh8Cu/k3HNx4iJTfIIfG4qfBNi5BJP28paSe2dU7T0LzBs+qVlqKCyzE8bqXoZcug==
-  /pnpm-shrinkwrap/4.0.1:
+  /pnpm-shrinkwrap/5.0.0:
     dependencies:
       '@types/node': 7.0.46
       '@types/ramda': 0.0.11
@@ -3129,9 +3129,9 @@ packages:
       write-file-atomic: 2.3.0
     dev: false
     peerDependencies:
-      pnpm-logger: ^0.6.2
+      '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-IOJhwMWoM2O9goa+0EleZCzrLYQmaBuNZeOmoFUV9WU54WHjQfeFJ1J+Qu7FRAGDlzWWIcuxL43Ap1XL4+OASw==
+      integrity: sha512-1flslfYroQpp2mseTwuifgOqjC64DRcqDXkjHmP89DE6/pkJoSmcG789wviHYQAZyo0KK06tF2FJf0z/XgjOlA==
   /prebuild-install/2.3.0:
     dependencies:
       expand-template: 1.1.0
@@ -4386,6 +4386,7 @@ specifiers:
   '@commitlint/cli': ^4.2.0
   '@commitlint/config-angular': ^4.2.0
   '@commitlint/prompt-cli': ^4.2.0
+  '@pnpm/logger': ^1.0.0
   '@pnpm/types': ^1.0.0
   '@reactivex/rxjs': ^5.5.0
   '@types/byline': ^4.2.31
@@ -4443,14 +4444,13 @@ specifiers:
   p-limit: ^1.1.0
   p-series: ^1.0.0
   package-preview: ^0.2.1
-  package-store: ^0.5.0-1
+  package-store: ^0.5.0
   path-absolute: ^1.0.0
   path-exists: ^3.0.0
   path-name: ^1.0.0
   pnpm-install-checks: ^1.1.0
-  pnpm-logger: ^0.7.1
   pnpm-registry-mock: ^1.10.0
-  pnpm-shrinkwrap: ^4.0.1
+  pnpm-shrinkwrap: ^5.0.0
   proper-lockfile: ^2.0.0
   ramda: ^0.25.0
   read-package-json: ^2.0.5
