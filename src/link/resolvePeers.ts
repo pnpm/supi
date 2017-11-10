@@ -206,12 +206,12 @@ function resolveNode (
   let modules: string
   let absolutePath: string
   const localLocation = path.join(ctx.nodeModules, `.${pkgIdToFilename(node.pkg.id)}`)
-  if (R.isEmpty(node.pkg.peerDependencies)) {
-    ctx.purePkgs.add(node.pkg.id)
-  }
   if (!externalPeers.length) {
     modules = path.join(localLocation, 'node_modules')
     absolutePath = node.pkg.id
+    if (R.isEmpty(node.pkg.peerDependencies)) {
+      ctx.purePkgs.add(node.pkg.id)
+    }
   } else {
     const peersFolder = createPeersFolderName(R.props<TreeNode>(externalPeers, ctx.tree).map(node => node.pkg))
     modules = path.join(localLocation, peersFolder, 'node_modules')
