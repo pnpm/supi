@@ -8,6 +8,7 @@ import R = require('ramda')
 import semver = require('semver')
 import logger from '@pnpm/logger'
 import path = require('path')
+import {oneLine} from 'common-tags'
 import {InstalledPackage} from '../install/installMultiple'
 import {TreeNode, TreeNodeMap} from '../api/install'
 import Rx = require('@reactivex/rxjs/dist/package/Rx')
@@ -320,12 +321,20 @@ function resolvePeers (
         .find(parentPkg => parentPkg.name === peerName)
         .mergeMap(resolved => {
           if (!resolved || resolved.nodeId && !tree[resolved.nodeId].installable) {
-            logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but none was installed.`)
+            const friendlyPath = nodeIdToFriendlyPath(node.nodeId, tree)
+            logger.warn(oneLine`
+              ${friendlyPath ? `${friendlyPath}: ` : ''}${packageFriendlyId(node.pkg)}
+              requires a peer of ${peerName}@${peerVersionRange} but none was installed.`
+            )
             return Rx.Observable.empty()
           }
 
           if (!semver.satisfies(resolved.version, peerVersionRange)) {
-            logger.warn(`${node.pkg.id} requires a peer of ${peerName}@${peerVersionRange} but version ${resolved.version} was installed.`)
+            const friendlyPath = nodeIdToFriendlyPath(node.nodeId, tree)
+            logger.warn(oneLine`
+              ${friendlyPath ? `${friendlyPath}: ` : ''}${packageFriendlyId(node.pkg)}
+              requires a peer of ${peerName}@${peerVersionRange} but version ${resolved.version} was installed.`
+            )
           }
 
           if (resolved.depth === 0 || resolved.depth === node.depth + 1) {
@@ -340,6 +349,17 @@ function resolvePeers (
           return Rx.Observable.empty()
         })
     })
+}
+
+function packageFriendlyId (pkg: {name: string, version: string}) {
+  return `${pkg.name}@${pkg.version}`
+}
+
+function nodeIdToFriendlyPath (nodeId: string, tree: TreeNodeMap) {
+  const parts = nodeId.split(':').slice(2, -2)
+  return R.tail(R.scan((prevNodeId, pkgId) => `${prevNodeId}${pkgId}:`, ':/:', parts))
+    .map(nodeId => tree[nodeId].pkg.name)
+    .join(' > ')
 }
 
 type ParentRef = {
