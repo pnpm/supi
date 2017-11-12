@@ -77,6 +77,7 @@ export type TreeNodeMap = {
 export type InstallContext = {
   installs: InstalledPackages,
   processed: Set<string>,
+  outdatedPkgs: {[pkgId: string]: string},
   localPackages: {
     optional: boolean,
     dev: boolean,
@@ -350,6 +351,7 @@ async function installInContext (
 
   const installCtx: InstallContext = {
     installs: {},
+    outdatedPkgs: {},
     localPackages: [],
     wantedShrinkwrap: ctx.wantedShrinkwrap,
     currentShrinkwrap: ctx.currentShrinkwrap,
@@ -512,6 +514,7 @@ async function installInContext (
     nonOptionalPackageIds: installCtx.nonOptionalPackageIds,
     localPackages: installCtx.localPackages,
     updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
+    outdatedPkgs: installCtx.outdatedPkgs,
   })
 
   await Promise.all([

@@ -74,6 +74,7 @@ export default async function (
     }[],
     // This is only needed till shrinkwrap v4
     updateShrinkwrapMinorVersion: boolean,
+    outdatedPkgs: {[pkgId: string]: string},
   }
 ): Promise<{
   resolvedNodesMap: Map<ResolvedNode>,
@@ -186,6 +187,7 @@ export default async function (
                 name: resolvedNode.name,
                 version: resolvedNode.version,
                 dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
+                latest: opts.outdatedPkgs[resolvedNode.pkgId],
               },
             })
           }
