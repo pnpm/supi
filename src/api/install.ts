@@ -459,7 +459,15 @@ async function installInContext (
     version: string,
     name: string,
     specRaw: string,
-  }[]).concat(installCtx.localPackages)
+  }[])
+  .concat(installCtx.localPackages)
+  .map(dep => {
+    const spec = R.find(spec => spec.raw === dep.specRaw, newSpecs)
+    return Object.assign(dep, {
+      spec: spec,
+      alias: spec && spec.name || dep.name
+    })
+  })
 
   let newPkg: PackageJson | undefined = ctx.pkg
   if (installType === 'named') {
@@ -470,17 +478,17 @@ async function installInContext (
     const saveType = getSaveType(opts)
     newPkg = await save(
       pkgJsonPath,
-      <any>pkgsToSave.map(dep => { // tslint:disable-line
-        const spec = R.find(spec => spec.raw === dep.specRaw, newSpecs)
-        if (!spec) return null
-        return {
-          name: spec.name || dep.name,
-          saveSpec: getSaveSpec(spec, dep.version, {
-            saveExact: opts.saveExact,
-            savePrefix: opts.savePrefix,
-          })
-        }
-      }).filter(Boolean),
+      <any>pkgsToSave // tslint:disable-line
+        .filter(dep => dep.spec)
+        .map(dep => {
+          return {
+            name: dep.alias,
+            saveSpec: getSaveSpec(dep.spec as PackageSpec, dep.version, {
+              saveExact: opts.saveExact,
+              savePrefix: opts.savePrefix,
+            })
+          }
+        }),
       saveType
     )
   } else {
@@ -500,26 +508,26 @@ async function installInContext (
     const getSpecFromPkg = (depName: string) => deps[depName] || devDeps[depName] || optionalDeps[depName]
 
     for (const dep of pkgsToSave) {
-      const ref = absolutePathToRef(dep.id, dep.name, dep.resolution, ctx.wantedShrinkwrap.registry)
-      const isDev = !!devDeps[dep.name]
-      const isOptional = !!optionalDeps[dep.name]
+      const ref = absolutePathToRef(dep.id, dep.alias, dep.resolution, ctx.wantedShrinkwrap.registry)
+      const isDev = !!devDeps[dep.alias]
+      const isOptional = !!optionalDeps[dep.alias]
       if (isDev) {
-        ctx.wantedShrinkwrap.devDependencies[dep.name] = ref
+        ctx.wantedShrinkwrap.devDependencies[dep.alias] = ref
       } else if (isOptional) {
-        ctx.wantedShrinkwrap.optionalDependencies[dep.name] = ref
+        ctx.wantedShrinkwrap.optionalDependencies[dep.alias] = ref
       } else {
-        ctx.wantedShrinkwrap.dependencies[dep.name] = ref
+        ctx.wantedShrinkwrap.dependencies[dep.alias] = ref
       }
       if (!isDev) {
-        delete ctx.wantedShrinkwrap.devDependencies[dep.name]
+        delete ctx.wantedShrinkwrap.devDependencies[dep.alias]
       }
       if (!isOptional) {
-        delete ctx.wantedShrinkwrap.optionalDependencies[dep.name]
+        delete ctx.wantedShrinkwrap.optionalDependencies[dep.alias]
       }
       if (isDev || isOptional) {
-        delete ctx.wantedShrinkwrap.dependencies[dep.name]
+        delete ctx.wantedShrinkwrap.dependencies[dep.alias]
       }
-      ctx.wantedShrinkwrap.specifiers[dep.name] = getSpecFromPkg(dep.name)
+      ctx.wantedShrinkwrap.specifiers[dep.alias] = getSpecFromPkg(dep.alias)
     }
   }
 
