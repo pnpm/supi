@@ -22,7 +22,7 @@ test('from a github repo', async function (t) {
   t.deepEqual(pkgJson.dependencies, {'is-negative': 'github:kevva/is-negative'}, 'has been added to dependencies in package.json')
 })
 
-test['only']('from a github repo with different name', async function (t: tape.Test) {
+test('from a github repo with different name', async function (t: tape.Test) {
   const project = prepare(t)
   await installPkgs(['negative@github:kevva/is-negative'], testDefaults())
 

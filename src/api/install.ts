@@ -64,7 +64,7 @@ export type InstalledPackages = {
 
 export type TreeNode = {
   nodeId: string,
-  children: string[], // Node IDs of children
+  children: {[alias: string]: string},
   pkg: InstalledPackage,
   depth: number,
   installable: boolean,
@@ -86,8 +86,9 @@ export type InstallContext = {
     name: string,
     specRaw: string,
   }[],
-  childrenIdsByParentId: {[parentId: string]: string[]},
+  childrenByParentId: {[parentId: string]: {alias: string, pkgId: string}[]},
   nodesToBuild: {
+    alias: string,
     nodeId: string,
     pkg: InstalledPackage,
     depth: number,
@@ -358,7 +359,7 @@ async function installInContext (
     installs: {},
     outdatedPkgs: {},
     localPackages: [],
-    childrenIdsByParentId: {},
+    childrenByParentId: {},
     nodesToBuild: [],
     wantedShrinkwrap: ctx.wantedShrinkwrap,
     currentShrinkwrap: ctx.currentShrinkwrap,
@@ -439,18 +440,24 @@ async function installInContext (
     installOpts
   )
   stageLogger.debug('resolution_done')
-  const rootNodeIds = rootPkgs.map(pkg => pkg.nodeId)
   installCtx.nodesToBuild.forEach(nodeToBuild => {
     installCtx.tree[nodeToBuild.nodeId] = {
       nodeId: nodeToBuild.nodeId,
       pkg: nodeToBuild.pkg,
       children: buildTree(installCtx, nodeToBuild.nodeId, nodeToBuild.pkg.id,
-        installCtx.childrenIdsByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable),
+        installCtx.childrenByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable),
       depth: nodeToBuild.depth,
       installable: nodeToBuild.installable,
     }
   })
-  const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
+  const rootNodeIds = rootPkgs.reduce((rootNodeIds, pkgAddress) => {
+    const pkg = installCtx.tree[pkgAddress.nodeId].pkg
+    const specRaw = pkg.specRaw
+    const spec = R.find(spec => spec.raw === specRaw, newSpecs)
+    rootNodeIds[spec && spec.name || pkg.name] = pkgAddress.nodeId
+    return rootNodeIds
+  }, {})
+  const pkgs: InstalledPackage[] = R.props<TreeNode>(R.values(rootNodeIds), installCtx.tree).map(node => node.pkg)
   const pkgsToSave = (pkgs as {
     optional: boolean,
     dev: boolean,
@@ -631,22 +638,22 @@ function buildTree (
   ctx: InstallContext,
   parentNodeId: string,
   parentId: string,
-  childrenIds: string[],
+  children: {alias: string, pkgId: string}[],
   depth: number,
   installable: boolean
 ) {
-  const childrenNodeIds = []
-  for (const childId of childrenIds) {
-    if (parentNodeId.indexOf(`:${parentId}:${childId}:`) !== -1) {
+  const childrenNodeIds = {}
+  for (const child of children) {
+    if (parentNodeId.indexOf(`:${parentId}:${child.pkgId}:`) !== -1) {
       continue
     }
-    const childNodeId = `${parentNodeId}${childId}:`
-    childrenNodeIds.push(childNodeId)
-    installable = installable && !ctx.skipped.has(childId)
+    const childNodeId = `${parentNodeId}${child.pkgId}:`
+    childrenNodeIds[child.alias] = childNodeId
+    installable = installable && !ctx.skipped.has(child.pkgId)
     ctx.tree[childNodeId] = {
       nodeId: childNodeId,
-      pkg: ctx.installs[childId],
-      children: buildTree(ctx, childNodeId, childId, ctx.childrenIdsByParentId[childId], depth + 1, installable),
+      pkg: ctx.installs[child.pkgId],
+      children: buildTree(ctx, childNodeId, child.pkgId, ctx.childrenByParentId[child.pkgId], depth + 1, installable),
       depth,
       installable,
     }

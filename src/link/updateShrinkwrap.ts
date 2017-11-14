@@ -23,7 +23,7 @@ export default function (
     const dependencyPath = dp.relative(shrinkwrap.registry, dependencyAbsolutePath)
     const result = R.partition(
       (childResolvedId: string) => pkgsToLink[dependencyAbsolutePath].optionalDependencies.has(pkgsToLink[childResolvedId].name),
-      pkgsToLink[dependencyAbsolutePath].children
+      R.values(pkgsToLink[dependencyAbsolutePath].children)
     )
     shrinkwrap.packages[dependencyPath] = toShrDependency(pkgsToLink[dependencyAbsolutePath].pkg, {
       dependencyAbsolutePath,
