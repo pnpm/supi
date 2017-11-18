@@ -20,7 +20,7 @@ import {
   PackageManifest
 } from '../types'
 import {
-  Dependencies,
+  Dependencies, PackageBin,
 } from '@pnpm/types'
 import memoize from '../memoize'
 import logStatus from '../logging/logInstallStatus'
@@ -61,6 +61,125 @@ export type InstalledPackage = {
   // it might be a good idea to write them directly to
   // InstallPackage to reduce RAM usage
   pkg: PackageManifest,
+}
+
+class InstalledPackageImpl implements InstalledPackage {
+  public id: string;
+  public resolution: Resolution;
+  public prod: boolean;
+  public dev: boolean;
+  public optional: boolean;
+  public fetchingFiles: Promise<PackageContentInfo>;
+  public calculatingIntegrity: Promise<void>;
+  public path: string;
+  public specRaw: string;
+  public name: string;
+  public version: string;
+  public peerDependencies: Dependencies;
+  public optionalDependencies: Set<string>;
+
+  // pkg fields
+  private bin?: PackageBin;
+  private directories?: {
+    bin?: string
+  };
+  private dependencies?: Dependencies;
+  private devDependencies?: Dependencies;
+  private pkgOptionalDependencies?: Dependencies;
+  private bundleDependencies?: string[];
+  private bundledDependencies?: string[];
+  private engines?: {
+    node?: string,
+    npm?: string,
+  };
+  private cpu?: string[];
+  private os?: string[];
+  private deprecated?: string;
+
+  constructor(fetchedPkg: FetchedPackage, spec: PackageSpec, pkg: PackageManifest) {
+    if (fetchedPkg.isLocal) {
+      throw new Error('Oups!');
+    }
+
+    this.id = fetchedPkg.id;
+    this.resolution = fetchedPkg.resolution;
+    this.optional = spec.optional;
+    this.name = pkg.name;
+    this.version = pkg.version;
+    this.prod = !spec.dev && !spec.optional;
+    this.dev = spec.dev;
+    this.fetchingFiles = fetchedPkg.fetchingFiles
+    this.calculatingIntegrity = fetchedPkg.calculatingIntegrity,
+    this.path = fetchedPkg.path;
+    this.specRaw = spec.raw;
+    this.peerDependencies = pkg.peerDependencies || {};
+    this.optionalDependencies = new Set(R.keys(pkg.optionalDependencies));
+
+    this.bin = pkg.bin;
+    this.directories = pkg.directories;
+    this.devDependencies = pkg.devDependencies;
+    this.pkgOptionalDependencies = pkg.optionalDependencies;
+    this.bundledDependencies = pkg.bundledDependencies;
+    this.bundleDependencies = pkg.bundleDependencies;
+    this.engines = pkg.engines;
+    this.cpu = pkg.cpu;
+    this.os = pkg.os;
+    this.deprecated = pkg.deprecated;
+  }
+
+  get hasBundledDependencies(): boolean {
+    return !!(this.bundledDependencies || this.bundleDependencies);
+  }
+
+  get pkg(): PackageManifest {
+    const pkg: PackageManifest = {
+      name: this.name,
+      version: this.version,
+      peerDependencies: this.peerDependencies,
+    };
+
+    if (this.bin) {
+      pkg.bin = this.bin;
+    }
+
+    if (this.directories) {
+      pkg.directories = this.directories;
+    }
+
+    if (this.devDependencies) {
+      pkg.devDependencies = this.devDependencies;
+    }
+
+    if (this.pkgOptionalDependencies) {
+      pkg.optionalDependencies = this.pkgOptionalDependencies;
+    }
+
+    if (this.bundledDependencies) {
+      pkg.bundledDependencies = this.bundledDependencies;
+    }
+
+    if (this.bundleDependencies) {
+      pkg.bundleDependencies = this.bundleDependencies;
+    }
+
+    if (this.engines) {
+      pkg.engines = this.engines;
+    }
+
+    if (this.cpu) {
+      pkg.cpu = this.cpu;
+    }
+
+    if (this.os) {
+      pkg.os = this.os;
+    }
+
+    if (this.deprecated) {
+      pkg.deprecated = this.deprecated;
+    }
+
+    return pkg;
+  }
 }
 
 export default async function installMultiple (
@@ -361,23 +480,8 @@ async function install (
       ctx.skipped.add(fetchedPkg.id)
     }
 
-    ctx.installs[fetchedPkg.id] = {
-      id: fetchedPkg.id,
-      resolution: fetchedPkg.resolution,
-      optional: spec.optional,
-      name: pkg.name,
-      version: pkg.version,
-      prod: !spec.dev && !spec.optional,
-      dev: spec.dev,
-      fetchingFiles: fetchedPkg.fetchingFiles,
-      calculatingIntegrity: fetchedPkg.calculatingIntegrity,
-      path: fetchedPkg.path,
-      specRaw: spec.raw,
-      peerDependencies: pkg.peerDependencies || {},
-      optionalDependencies: new Set(R.keys(pkg.optionalDependencies)),
-      hasBundledDependencies: !!(pkg.bundledDependencies || pkg.bundleDependencies),
-      pkg,
-    }
+    ctx.installs[fetchedPkg.id] = new InstalledPackageImpl(fetchedPkg, spec, pkg);
+
     const children = await installDependencies(
       pkg,
       spec,
