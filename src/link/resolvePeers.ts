@@ -122,14 +122,15 @@ function resolvePeersOfNode (
     return {}
   }
 
-  const unknownResolvedPeersOfChildren = resolvePeersOfChildren(node.children, parentPkgs, ctx, nodeId)
+  const children = node.children();
+  const unknownResolvedPeersOfChildren = resolvePeersOfChildren(children, parentPkgs, ctx, nodeId)
 
   const resolvedPeers = R.isEmpty(node.pkg.peerDependencies)
     ? {}
     : resolvePeers(node, Object.assign({}, parentPkgs,
-      toPkgByName(R.keys(node.children).map(alias => ({
+      toPkgByName(R.keys(children).map(alias => ({
         alias: alias,
-        node: ctx.tree[node.children[alias]],
+        node: ctx.tree[children[alias]],
       })))
     ), ctx.tree)
 
@@ -172,7 +173,7 @@ function resolvePeersOfNode (
       hardlinkedLocation,
       independent,
       optionalDependencies: node.pkg.optionalDependencies,
-      children: Object.assign({}, node.children, resolvedPeers),
+      children: Object.assign({}, children, resolvedPeers),
       depth: node.depth,
       absolutePath,
       prod: node.pkg.prod,
