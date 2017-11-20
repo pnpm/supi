@@ -125,14 +125,15 @@ function resolvePeersOfNode (
     return {}
   }
 
-  const parentPkgs = R.isEmpty(node.children)
+  const children = node.children();
+  const parentPkgs = R.isEmpty(children)
     ? parentParentPkgs
     : Object.assign(
         {},
         parentParentPkgs,
-        toPkgByName(R.keys(node.children).map(alias => ({alias: alias, node: ctx.tree[node.children[alias]]})))
+        toPkgByName(R.keys(children).map(alias => ({alias: alias, node: ctx.tree[children[alias]]})))
     )
-  const unknownResolvedPeersOfChildren = resolvePeersOfChildren(node.children, parentPkgs, ctx, nodeId)
+  const unknownResolvedPeersOfChildren = resolvePeersOfChildren(children, parentPkgs, ctx, nodeId)
 
   const resolvedPeers = R.isEmpty(node.pkg.peerDependencies)
     ? {}
@@ -161,7 +162,7 @@ function resolvePeersOfNode (
 
   ctx.absolutePathsByNodeId[nodeId] = absolutePath
   if (!ctx.resolvedTree[absolutePath] || ctx.resolvedTree[absolutePath].depth > node.depth) {
-    const independent = ctx.independentLeaves && R.isEmpty(node.children) && R.isEmpty(node.pkg.peerDependencies)
+    const independent = ctx.independentLeaves && R.isEmpty(children) && R.isEmpty(node.pkg.peerDependencies)
     const pathToUnpacked = path.join(node.pkg.path, 'node_modules', node.pkg.name)
     const hardlinkedLocation = !independent
       ? path.join(modules, node.pkg.name)
@@ -177,7 +178,7 @@ function resolvePeersOfNode (
       hardlinkedLocation,
       independent,
       optionalDependencies: node.pkg.optionalDependencies,
-      children: Object.assign(node.children, resolvedPeers),
+      children: Object.assign(children, resolvedPeers),
       depth: node.depth,
       absolutePath,
       prod: node.pkg.prod,
