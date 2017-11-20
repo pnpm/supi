@@ -440,10 +440,8 @@ async function installInContext (
     installCtx.tree[nodeToBuild.nodeId] = {
       nodeId: nodeToBuild.nodeId,
       pkg: nodeToBuild.pkg,
-      get children() {
-        return buildTree(installCtx, nodeToBuild.nodeId, nodeToBuild.pkg.id,
-          installCtx.childrenByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable)
-      },
+      children: buildTree(installCtx, nodeToBuild.nodeId, nodeToBuild.pkg.id,
+        installCtx.childrenByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable).childrenNodeRefs,
       depth: nodeToBuild.depth,
       installable: nodeToBuild.installable,
     }
@@ -647,25 +645,32 @@ function buildTree (
   depth: number,
   installable: boolean
 ) {
-  const childrenNodeIds = {}
+  let hasPeers = false
+  const childrenNodeRefs = {}
   for (const child of children) {
-    if (parentNodeId.indexOf(`:${parentId}:${child.pkgId}:`) !== -1) {
+    if (ctx.tree[child.pkgId] && ctx.tree[child.pkgId].depth < depth || parentNodeId.indexOf(`:${parentId}:${child.pkgId}:`) !== -1) {
       continue
     }
     const childNodeId = `${parentNodeId}${child.pkgId}:`
-    childrenNodeIds[child.alias] = childNodeId
     installable = installable && !ctx.skipped.has(child.pkgId)
-    ctx.tree[childNodeId] = {
-      nodeId: childNodeId,
+    const btResult = buildTree(ctx, childNodeId, child.pkgId, ctx.childrenByParentId[child.pkgId], depth + 1, installable)
+    const currentHasPeers = btResult.hasPeers || !R.isEmpty(ctx.installs[child.pkgId].peerDependencies)
+    if (currentHasPeers) {
+      hasPeers = true
+    }
+    childrenNodeRefs[child.alias] = currentHasPeers ? childNodeId : child.pkgId
+    ctx.tree[childrenNodeRefs[child.alias]] = {
+      nodeId: childrenNodeRefs[child.alias],
       pkg: ctx.installs[child.pkgId],
-      get children() {
-        return buildTree(ctx, childNodeId, child.pkgId, ctx.childrenByParentId[child.pkgId], depth + 1, installable);
-      },
+      children: btResult.childrenNodeRefs,
       depth,
       installable,
     }
   }
-  return childrenNodeIds
+  return {
+    hasPeers,
+    childrenNodeRefs,
+  }
 }
 
 async function getTopParents (pkgNames: string[], modules: string) {
