@@ -269,7 +269,7 @@ async function install (
     pkg: loggedPkg,
   })
 
-  const fetchedPkg = await fetch({alias: wantedDependency.alias, fetchSpec: wantedDependency.pref}, {
+  const fetchedPkg = await fetch(wantedDependency, {
     loggedPkg,
     update: options.update,
     fetchingLocker: ctx.fetchingLocker,
