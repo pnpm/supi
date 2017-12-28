@@ -23,8 +23,8 @@ type PackageToRebuild = {
   pkgShr: DependencyShrinkwrap
 }
 
-function getPackagesInfo (packages: ResolvedPackages): PackageToRebuild[] {
-  return R.keys(packages)
+function getPackagesInfo (packages: ResolvedPackages, idsToRebuild: string[]): PackageToRebuild[] {
+  return idsToRebuild
     .map(relativeDepPath => {
       const pkgShr = packages[relativeDepPath]
       const pkgInfo = getPkgInfoFromShr(relativeDepPath, pkgShr)
@@ -77,7 +77,7 @@ export async function rebuildPkgs (pkgSpecs: string[], maybeOpts: PnpmOptions) {
     }
   })
 
-  const pkgs = getPackagesInfo(packages)
+  const pkgs = getPackagesInfo(packages, R.keys(packages))
     .filter(pkg => matches(searched, pkg))
 
   await _rebuild(pkgs, modules, ctx.currentShrinkwrap.registry, opts)
@@ -107,15 +107,17 @@ export async function rebuild (maybeOpts: PnpmOptions) {
   await ctx.storeController.close() // TODO: storeController should not be created at all in this case
   const modules = path.join(opts.prefix, 'node_modules')
 
-  let pkgs: PackageToRebuild[]
+  let idsToRebuild: string[] = []
 
-  if (ctx.packagesToBuild) {
-    pkgs = ctx.packagesToBuild as PackageToRebuild[]
+  if (opts.pending) {
+    idsToRebuild = ctx.pendingBuilds
   } else if (ctx.currentShrinkwrap && ctx.currentShrinkwrap.packages) {
-    pkgs = getPackagesInfo(ctx.currentShrinkwrap.packages)
+    idsToRebuild = R.keys(ctx.currentShrinkwrap.packages)
   } else {
     return
   }
+
+  const pkgs = getPackagesInfo(ctx.currentShrinkwrap.packages || {}, idsToRebuild)
 
   await _rebuild(pkgs, modules, ctx.currentShrinkwrap.registry, opts)
 
@@ -125,8 +127,7 @@ export async function rebuild (maybeOpts: PnpmOptions) {
     skipped: Array.from(ctx.skipped),
     layoutVersion: LAYOUT_VERSION,
     independentLeaves: opts.independentLeaves,
-    hasPackagesToBuild: false,
-    packagesToBuild: [],
+    pendingBuilds: [],
   })
 }
 

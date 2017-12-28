@@ -4,6 +4,7 @@ import {
   PnpmOptions,
   StrictPnpmOptions,
 } from '@pnpm/types'
+import * as dp from 'dependency-path'
 import path = require('path')
 import logger, {
   streamParser,
@@ -521,21 +522,11 @@ async function installInContext (
     outdatedPkgs: installCtx.outdatedPkgs,
   })
 
-  let packagesToBuild: object[] = []
-  let hasPackagesToBuild = false
+  let pendingBuilds: string[] = []
   if (opts.ignoreScripts) {
-    hasPackagesToBuild = true
-    packagesToBuild = R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
-      .map(pkg => {
-        return {
-          name: pkg.name,
-          relativeDepPath: pkg.id,
-          pkgShr: {
-            id: pkg.id,
-            optional: pkg.optional,
-          },
-        }
-      })
+    pendingBuilds = result.newPkgResolvedIds.map(absolutePath => {
+      return dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)
+    })
   }
 
   await Promise.all([
@@ -548,8 +539,7 @@ async function installInContext (
         skipped: Array.from(installCtx.skipped),
         layoutVersion: LAYOUT_VERSION,
         independentLeaves: opts.independentLeaves,
-        hasPackagesToBuild: hasPackagesToBuild,
-        packagesToBuild: packagesToBuild,
+        pendingBuilds: pendingBuilds,
       }),
   ])
 

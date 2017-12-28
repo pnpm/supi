@@ -14,8 +14,7 @@ export type Modules = {
   skipped: string[],
   layoutVersion: number,
   independentLeaves: boolean,
-  hasPackagesToBuild: boolean,
-  packagesToBuild: object,
+  pendingBuilds: string[],
 }
 
 export async function read (modulesPath: string): Promise<Modules | null> {
