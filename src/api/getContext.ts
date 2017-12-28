@@ -98,13 +98,9 @@ export default async function getContext (opts: StrictSupiOptions, installType?:
     existsCurrentShrinkwrap: !!files[2],
     storeController: files[3],
     skipped: new Set(modules && modules.skipped || []),
-    pendingBuilds: [],
+    pendingBuilds: modules && modules.pendingBuilds || [],
   }
   packageJsonLogger.debug({ initial: ctx.pkg })
-
-  if (modules) {
-    ctx.pendingBuilds = modules.pendingBuilds
-  }
 
   return ctx
 }
