@@ -522,13 +522,6 @@ async function installInContext (
     outdatedPkgs: installCtx.outdatedPkgs,
   })
 
-  let pendingBuilds: string[] = []
-  if (opts.ignoreScripts) {
-    pendingBuilds = result.newPkgResolvedIds.map(absolutePath => {
-      return dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)
-    })
-  }
-
   ctx.pendingBuilds = ctx.pendingBuilds
     .filter(pkgId => result.removedPkgIds.indexOf(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)) === -1)
     .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
