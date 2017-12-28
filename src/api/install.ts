@@ -529,6 +529,10 @@ async function installInContext (
     })
   }
 
+  ctx.pendingBuilds = ctx.pendingBuilds
+    .filter(pkgId => result.removedPkgIds.indexOf(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)) === -1)
+    .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
+
   await Promise.all([
     saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
     result.currentShrinkwrap.packages === undefined
@@ -539,7 +543,7 @@ async function installInContext (
         skipped: Array.from(installCtx.skipped),
         layoutVersion: LAYOUT_VERSION,
         independentLeaves: opts.independentLeaves,
-        pendingBuilds: pendingBuilds,
+        pendingBuilds: ctx.pendingBuilds,
       }),
   ])
 

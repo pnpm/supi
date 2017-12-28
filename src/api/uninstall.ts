@@ -1,5 +1,6 @@
 import rimraf = require('rimraf-then')
 import path = require('path')
+import * as dp from 'dependency-path'
 import getContext, {PnpmContext} from './getContext'
 import getSaveType from '../getSaveType'
 import removeDeps from '../removeDeps'
@@ -65,6 +66,7 @@ export async function uninstallInContext (pkgsToUninstall: string[], ctx: PnpmCo
     storeController: ctx.storeController,
     bin: opts.bin,
   })
+  ctx.pendingBuilds = ctx.pendingBuilds.filter(pkgId => removedPkgIds.indexOf(dp.resolve(newShr.registry, pkgId)) === -1)
   await ctx.storeController.close()
   const currentShrinkwrap = makePartialCurrentShrinkwrap
     ? pruneShrinkwrap(ctx.currentShrinkwrap, pkg)
@@ -76,7 +78,7 @@ export async function uninstallInContext (pkgsToUninstall: string[], ctx: PnpmCo
     skipped: Array.from(ctx.skipped).filter(pkgId => removedPkgIds.indexOf(pkgId) === -1),
     layoutVersion: LAYOUT_VERSION,
     independentLeaves: opts.independentLeaves,
-    pendingBuilds: [],
+    pendingBuilds: ctx.pendingBuilds,
   })
   await removeOuterLinks(pkgsToUninstall, path.join(ctx.root, 'node_modules'), {
     storePath: ctx.storePath,
