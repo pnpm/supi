@@ -14,6 +14,7 @@ import {
 import npa = require('@zkochan/npm-package-arg')
 import semver = require('semver')
 import getPkgInfoFromShr from '../getPkgInfoFromShr'
+import {save as saveModules, LAYOUT_VERSION} from '../fs/modulesController';
 
 type PackageToRebuild = {
   relativeDepPath: string,
@@ -106,12 +107,27 @@ export async function rebuild (maybeOpts: PnpmOptions) {
   await ctx.storeController.close() // TODO: storeController should not be created at all in this case
   const modules = path.join(opts.prefix, 'node_modules')
 
-  if (!ctx.currentShrinkwrap || !ctx.currentShrinkwrap.packages) return
-  const packages = ctx.currentShrinkwrap.packages
+  let pkgs: PackageToRebuild[]
 
-  const pkgs = getPackagesInfo(packages)
+  if (ctx.packagesToBuild) {
+    pkgs = ctx.packagesToBuild as PackageToRebuild[]
+  } else if (ctx.currentShrinkwrap && ctx.currentShrinkwrap.packages) {
+    pkgs = getPackagesInfo(ctx.currentShrinkwrap.packages)
+  } else {
+    return
+  }
 
   await _rebuild(pkgs, modules, ctx.currentShrinkwrap.registry, opts)
+
+  await saveModules(path.join(ctx.root, 'node_modules'), {
+    packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
+    store: ctx.storePath,
+    skipped: Array.from(ctx.skipped),
+    layoutVersion: LAYOUT_VERSION,
+    independentLeaves: opts.independentLeaves,
+    hasPackagesToBuild: false,
+    packagesToBuild: [],
+  })
 }
 
 async function _rebuild (

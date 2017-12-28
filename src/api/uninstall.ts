@@ -76,6 +76,8 @@ export async function uninstallInContext (pkgsToUninstall: string[], ctx: PnpmCo
     skipped: Array.from(ctx.skipped).filter(pkgId => removedPkgIds.indexOf(pkgId) === -1),
     layoutVersion: LAYOUT_VERSION,
     independentLeaves: opts.independentLeaves,
+    hasPackagesToBuild: false,
+    packagesToBuild: [],
   })
   await removeOuterLinks(pkgsToUninstall, path.join(ctx.root, 'node_modules'), {
     storePath: ctx.storePath,

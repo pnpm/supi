@@ -35,6 +35,7 @@ export type PnpmContext = {
   currentShrinkwrap: Shrinkwrap,
   wantedShrinkwrap: Shrinkwrap,
   skipped: Set<string>,
+  packagesToBuild?: object,
 }
 
 export default async function getContext (opts: StrictSupiOptions, installType?: 'named' | 'general'): Promise<PnpmContext> {
@@ -99,6 +100,10 @@ export default async function getContext (opts: StrictSupiOptions, installType?:
     skipped: new Set(modules && modules.skipped || []),
   }
   packageJsonLogger.debug({ initial: ctx.pkg })
+
+  if (modules && modules.hasPackagesToBuild) {
+    ctx.packagesToBuild = modules.packagesToBuild
+  }
 
   return ctx
 }

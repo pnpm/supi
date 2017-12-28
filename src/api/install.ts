@@ -521,6 +521,23 @@ async function installInContext (
     outdatedPkgs: installCtx.outdatedPkgs,
   })
 
+  let packagesToBuild: object[] = []
+  let hasPackagesToBuild = false
+  if (opts.ignoreScripts) {
+    hasPackagesToBuild = true
+    packagesToBuild = R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
+      .map(pkg => {
+        return {
+          name: pkg.name,
+          relativeDepPath: pkg.id,
+          pkgShr: {
+            id: pkg.id,
+            optional: pkg.optional,
+          },
+        }
+      })
+  }
+
   await Promise.all([
     saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
     result.currentShrinkwrap.packages === undefined
@@ -531,13 +548,14 @@ async function installInContext (
         skipped: Array.from(installCtx.skipped),
         layoutVersion: LAYOUT_VERSION,
         independentLeaves: opts.independentLeaves,
+        hasPackagesToBuild: hasPackagesToBuild,
+        packagesToBuild: packagesToBuild,
       }),
   ])
 
   // postinstall hooks
   if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length)) {
     const limitChild = pLimit(opts.childConcurrency)
-    const linkedPkgsMapValues = R.values(result.linkedPkgsMap)
     await Promise.all(
       R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
         .map(pkg => limitChild(async () => {
