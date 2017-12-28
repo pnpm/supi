@@ -67,6 +67,7 @@ devDependencies:
   '@commitlint/config-angular': 4.3.0
   '@commitlint/prompt-cli': 4.3.0
   '@pnpm/logger': 1.0.0
+  '@types/es6-promise': 0.0.33
   '@types/mkdirp': 0.5.2
   '@types/sinon': 4.1.2
   '@types/tape': 4.2.31
@@ -389,6 +390,10 @@ packages:
     dev: false
     resolution:
       integrity: sha512-HI1tSO87vmd1sPS3DOVSK4gvVKROvCBFvAnXlLiQtAus/+1xXMQcNyu9TX2ChwRXFeQZeB9+f+nMo99xLd5DdA==
+  /@types/es6-promise/0.0.33:
+    dev: true
+    resolution:
+      integrity: sha512-HKJFVLCGrWQ/1unEw8JdaTxu6n3EUxmwTxJ6D0O1x0gD8joCsgoTWxEgevb7fp2XIogNjof3KEd+3bJoGne/nw==
   /@types/fs-extra/4.0.7:
     dependencies:
       '@types/node': 8.5.2
@@ -4919,6 +4924,7 @@ specifiers:
   '@pnpm/types': ^1.4.0
   '@types/byline': ^4.2.31
   '@types/common-tags': ^1.2.5
+  '@types/es6-promise': ^0.0.33
   '@types/load-json-file': ^2.0.5
   '@types/mkdirp': ^0.5.1
   '@types/mz': ^0.0.32
