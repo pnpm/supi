@@ -532,14 +532,16 @@ async function installInContext (
 
   await Promise.all([
     saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
-    saveModules(path.join(ctx.root, 'node_modules'), {
-      packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
-      store: ctx.storePath,
-      skipped: Array.from(installCtx.skipped),
-      layoutVersion: LAYOUT_VERSION,
-      independentLeaves: opts.independentLeaves,
-      pendingBuilds: ctx.pendingBuilds,
-    }),
+    result.currentShrinkwrap.packages === undefined && result.removedPkgIds.length === 0
+      ? Promise.resolve()
+      : saveModules(path.join(ctx.root, 'node_modules'), {
+        packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
+        store: ctx.storePath,
+        skipped: Array.from(installCtx.skipped),
+        layoutVersion: LAYOUT_VERSION,
+        independentLeaves: opts.independentLeaves,
+        pendingBuilds: ctx.pendingBuilds,
+      }),
   ])
 
   // postinstall hooks
