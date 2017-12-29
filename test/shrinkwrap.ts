@@ -23,6 +23,9 @@ test('shrinkwrap file has correct format', async (t: tape.Test) => {
 
   await installPkgs(['pkg-with-1-dep', '@rstacruz/tap-spec@4.1.1', 'kevva/is-negative#1d7e288222b53a0cab90a331f1865220ec29560c'], testDefaults({save: true}))
 
+  const modules = await project.loadModules()
+  t.equal(modules['pendingBuilds'].length, 0)
+
   const shr = await project.loadShrinkwrap()
   const id = '/pkg-with-1-dep/100.0.0'
 

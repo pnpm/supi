@@ -90,6 +90,14 @@ export default function prepare (t: Test, pkg?: Object) {
         throw err
       }
     },
+    loadModules: async () => {
+      try {
+        return await loadYamlFile<any>('node_modules/.modules.yaml') // tslint:disable-line
+      } catch (err) {
+        if (err.code === 'ENOENT') return null
+        throw err
+      }
+    }
   }
   return project
 }
