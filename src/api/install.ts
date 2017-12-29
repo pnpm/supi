@@ -526,13 +526,14 @@ async function installInContext (
     .filter(pkgId => !result.removedPkgIds.has(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)))
 
   if (opts.ignoreScripts) {
+    // we can use concat here because we always only append new packages, which are guaranteed to not be there by definition
     ctx.pendingBuilds = ctx.pendingBuilds
       .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
   }
 
   await Promise.all([
     saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
-    result.currentShrinkwrap.packages === undefined && result.removedPkgIds.length === 0
+    result.currentShrinkwrap.packages === undefined && result.removedPkgIds.size === 0
       ? Promise.resolve()
       : saveModules(path.join(ctx.root, 'node_modules'), {
         packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
