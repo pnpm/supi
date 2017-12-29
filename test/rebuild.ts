@@ -58,6 +58,12 @@ test('rebuild with pending option', async function (t: tape.Test) {
   await installPkgs(['pre-and-postinstall-scripts-example'], testDefaults({ignoreScripts: true}))
   await installPkgs(['zkochan/install-scripts-example'], testDefaults({ignoreScripts: true}))
 
+  await project.hasNot('pre-and-postinstall-scripts-example/generated-by-preinstall')
+  await project.hasNot('pre-and-postinstall-scripts-example/generated-by-postinstall')
+
+  await project.hasNot('install-scripts-example-for-pnpm/generated-by-preinstall')
+  await project.hasNot('install-scripts-example-for-pnpm/generated-by-postinstall')
+
   await rebuild(testDefaults({rawNpmConfig: {'pending': true}}))
 
   {

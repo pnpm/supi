@@ -53,7 +53,7 @@ export default async function (
   wantedShrinkwrap: Shrinkwrap,
   currentShrinkwrap: Shrinkwrap,
   newPkgResolvedIds: string[],
-  removedPkgIds: string[],
+  removedPkgIds: Set<string>,
 }> {
   // TODO: decide what kind of logging should be here.
   // The `Creating dependency tree` is not good to report in all cases as

@@ -523,8 +523,12 @@ async function installInContext (
   })
 
   ctx.pendingBuilds = ctx.pendingBuilds
-    .filter(pkgId => result.removedPkgIds.indexOf(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)) === -1)
-    .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
+    .filter(pkgId => !result.removedPkgIds.has(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)))
+
+  if (opts.ignoreScripts) {
+    ctx.pendingBuilds = ctx.pendingBuilds
+      .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
+  }
 
   await Promise.all([
     saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
