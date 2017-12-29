@@ -21,10 +21,31 @@ import linkIndexedDir from '../fs/linkIndexedDir'
 import ncpCB = require('ncp')
 import thenify = require('thenify')
 import {rootLogger, statsLogger} from '../loggers'
+import child_process = require('child_process')
+import util = require('util')
+let execFilePromise: any  // tslint:disable-line
+if (util.promisify) {
+  execFilePromise = util.promisify(child_process.execFile)
+} else {
+  execFilePromise = (filename: string, args: string[]) => {
+    return new Promise((resolve, reject) => {
+      child_process.execFile(filename, args, (err, stdout, stderr) => {
+        if (err) {
+          return reject(err)
+        } else {
+          return resolve({
+            stdout,
+            stderr,
+          })
+        }
+      })
+    })
+  }
+}
 
 const ncp = thenify(ncpCB)
 
-export default async function (
+export default async function linkPackages (
   rootNodeIdsByAlias: {[alias: string]: string},
   tree: {[nodeId: string]: TreeNode},
   opts: {
@@ -47,6 +68,7 @@ export default async function (
     // This is only needed till shrinkwrap v4
     updateShrinkwrapMinorVersion: boolean,
     outdatedPkgs: {[pkgId: string]: string},
+    reflinks: boolean,
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -201,6 +223,7 @@ async function linkNewPackages (
     global: boolean,
     baseNodeModules: string,
     optional: boolean,
+    reflinks: boolean,
   }
 ): Promise<string[]> {
   const nextPkgResolvedIds = R.keys(wantedShrinkwrap.packages)
@@ -268,12 +291,14 @@ async function linkAllPkgs (
   linkPkg: (fetchResult: PackageFilesResponse, dependency: DependencyTreeNode, opts: {
     force: boolean,
     baseNodeModules: string,
+    reflinks: boolean,
   }) => Promise<void>,
   alldeps: DependencyTreeNode[],
   opts: {
     force: boolean,
     global: boolean,
     baseNodeModules: string,
+    reflinks: boolean,
   }
 ) {
   return Promise.all(
@@ -366,12 +391,20 @@ async function linkPkg (
   opts: {
     force: boolean,
     baseNodeModules: string,
+    reflinks: boolean,
   }
 ) {
   const pkgJsonPath = path.join(dependency.hardlinkedLocation, 'package.json')
 
-  if (!filesResponse.fromStore || opts.force || !await exists(pkgJsonPath) || !await pkgLinkedToStore(pkgJsonPath, dependency)) {
-    await linkIndexedDir(dependency.path, dependency.hardlinkedLocation, filesResponse.filenames)
+  if (opts.reflinks) {
+    if (!filesResponse.fromStore || opts.force || !await exists(pkgJsonPath)) {
+      await execFilePromise('mkdir', ['-p', dependency.hardlinkedLocation])
+      await execFilePromise('cp', ['-r', '--reflink', dependency.path + '/.', dependency.hardlinkedLocation])
+    }
+  } else {
+    if (!filesResponse.fromStore || opts.force || !await exists(pkgJsonPath) || !await pkgLinkedToStore(pkgJsonPath, dependency)) {
+      await linkIndexedDir(dependency.path, dependency.hardlinkedLocation, filesResponse.filenames)
+    }
   }
 }
 

@@ -520,6 +520,7 @@ async function installInContext (
     makePartialCurrentShrinkwrap,
     updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
     outdatedPkgs: installCtx.outdatedPkgs,
+    reflinks: opts.rawNpmConfig['reflinks'],
   })
 
   ctx.pendingBuilds = ctx.pendingBuilds
