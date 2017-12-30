@@ -18,6 +18,7 @@ import * as dp from 'dependency-path'
 import {Shrinkwrap, DependencyShrinkwrap} from 'pnpm-shrinkwrap'
 import removeOrphanPkgs from '../api/removeOrphanPkgs'
 import linkIndexedDir from '../fs/linkIndexedDir'
+import mkdirp = require('mkdirp-promise')
 import ncpCB = require('ncp')
 import thenify = require('thenify')
 import {rootLogger, statsLogger} from '../loggers'
@@ -429,7 +430,8 @@ async function copyPkg (
 
   const pkgJsonPath = path.join(dependency.hardlinkedLocation, 'package.json')
   if (newlyFetched || opts.force || !await exists(pkgJsonPath)) {
-    await ncp(dependency.path, dependency.hardlinkedLocation)
+    await mkdirp(dependency.hardlinkedLocation)
+    await ncp(dependency.path + '/.', dependency.hardlinkedLocation)
   }
 }
 
