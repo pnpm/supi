@@ -265,14 +265,16 @@ async function linkNewPackages (
         case 'auto':
           try {
             await linkAllPkgs(hardlinkPkg, newPkgs, opts)
-            break
           } catch (err) {
             if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
             logger.warn(err.message)
             logger.info('Falling back to copying packages from store')
+            await linkAllPkgs(copyPkg, newPkgs, opts)
           }
+          break
         case 'copy':
           await linkAllPkgs(copyPkg, newPkgs, opts)
+          break
       }
     })()
   ])
