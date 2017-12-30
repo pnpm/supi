@@ -22,27 +22,8 @@ import ncpCB = require('ncp')
 import thenify = require('thenify')
 import {rootLogger, statsLogger} from '../loggers'
 import child_process = require('child_process')
-import util = require('util')
-let execFilePromise: any  // tslint:disable-line
-if (util.promisify) {
-  execFilePromise = util.promisify(child_process.execFile)
-} else {
-  execFilePromise = (filename: string, args: string[]) => {
-    return new Promise((resolve, reject) => {
-      child_process.execFile(filename, args, (err, stdout, stderr) => {
-        if (err) {
-          return reject(err)
-        } else {
-          return resolve({
-            stdout,
-            stderr,
-          })
-        }
-      })
-    })
-  }
-}
 
+const execFilePromise = thenify(child_process.execFile)
 const ncp = thenify(ncpCB)
 
 export default async function linkPackages (
@@ -68,7 +49,7 @@ export default async function linkPackages (
     // This is only needed till shrinkwrap v4
     updateShrinkwrapMinorVersion: boolean,
     outdatedPkgs: {[pkgId: string]: string},
-    reflinks: boolean,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -223,7 +204,7 @@ async function linkNewPackages (
     global: boolean,
     baseNodeModules: string,
     optional: boolean,
-    reflinks: boolean,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   }
 ): Promise<string[]> {
   const nextPkgResolvedIds = R.keys(wantedShrinkwrap.packages)
@@ -269,13 +250,25 @@ async function linkNewPackages (
   await Promise.all([
     linkAllModules(newPkgs, pkgsToLink, {optional: opts.optional}),
     (async () => {
-      try {
-        await linkAllPkgs(linkPkg, newPkgs, opts)
-      } catch (err) {
-        if (!err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
-        logger.warn(err.message)
-        logger.info('Falling back to copying packages from store')
-        await linkAllPkgs(copyPkg, newPkgs, opts)
+      // this works in the following way:
+      // - auto: try to hardlink the packages, if it fails, fallback to copy
+      // - hardlink: hardlink the packages, no fallback
+      // - reflink: reflink the packages, no fallback
+      // - copy: copy the packages, do not try to link them first
+      switch (opts.packageImportMethod) {
+        case 'auto':
+        case 'hardlink':
+        case 'reflink':
+          try {
+            await linkAllPkgs(linkPkg, newPkgs, opts)
+            break
+          } catch (err) {
+            if (opts.packageImportMethod !== 'auto' || !err.message.startsWith('EXDEV: cross-device link not permitted')) throw err
+            logger.warn(err.message)
+            logger.info('Falling back to copying packages from store')
+          }
+        case 'copy':
+          await linkAllPkgs(copyPkg, newPkgs, opts)
       }
     })()
   ])
@@ -291,14 +284,14 @@ async function linkAllPkgs (
   linkPkg: (fetchResult: PackageFilesResponse, dependency: DependencyTreeNode, opts: {
     force: boolean,
     baseNodeModules: string,
-    reflinks: boolean,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   }) => Promise<void>,
   alldeps: DependencyTreeNode[],
   opts: {
     force: boolean,
     global: boolean,
     baseNodeModules: string,
-    reflinks: boolean,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   }
 ) {
   return Promise.all(
@@ -391,12 +384,12 @@ async function linkPkg (
   opts: {
     force: boolean,
     baseNodeModules: string,
-    reflinks: boolean,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   }
 ) {
   const pkgJsonPath = path.join(dependency.hardlinkedLocation, 'package.json')
 
-  if (opts.reflinks) {
+  if (opts.packageImportMethod === 'reflink') {
     if (!filesResponse.fromStore || opts.force || !await exists(pkgJsonPath)) {
       await execFilePromise('mkdir', ['-p', dependency.hardlinkedLocation])
       await execFilePromise('cp', ['-r', '--reflink', dependency.path + '/.', dependency.hardlinkedLocation])
