@@ -397,7 +397,7 @@ async function reflinkPkg (
   const pkgJsonPath = path.join(dependency.hardlinkedLocation, 'package.json')
 
   if (!filesResponse.fromStore || opts.force || !await exists(pkgJsonPath)) {
-    await execFilePromise('mkdir', ['-p', dependency.hardlinkedLocation])
+    await mkdirp(dependency.hardlinkedLocation)
     await execFilePromise('cp', ['-r', '--reflink', dependency.path + '/.', dependency.hardlinkedLocation])
   }
 }
