@@ -61,6 +61,11 @@ import {
   Resolution,
   RequestPackageFunction,
 } from '@pnpm/package-requester'
+import thenify = require('thenify')
+import child_process = require('child_process')
+import {rebuild} from './rebuild';
+
+const execPromise = thenify(child_process)
 
 export type InstalledPackages = {
   [name: string]: InstalledPackage
@@ -136,7 +141,7 @@ export async function install (maybeOpts?: SupiOptions) {
     throw new Error('Optional dependencies cannot be installed without production dependencies')
   }
 
-  if (opts.lock) {
+  if (opts.lock && !opts.customInstall) {
     await lock(opts.prefix, _install, {stale: opts.lockStaleDuration, locks: opts.locks})
   } else {
     await _install()
@@ -189,7 +194,13 @@ export async function install (maybeOpts?: SupiOptions) {
       await npmRunScript('preinstall', ctx.pkg, scriptsOpts)
     }
 
-    await installInContext(installType, specs, [], ctx, preferredVersions, opts)
+    if (opts.customInstall) {
+      const {stdout, stderr} = await execPromise(opts.customInstall, {maxBuffer: 10 * 1024 * 1024})
+      logger.info(stdout)
+      await rebuild(opts)
+    } else {
+      await installInContext(installType, specs, [], ctx, preferredVersions, opts)
+    }
 
     if (scripts['install']) {
       await npmRunScript('install', ctx.pkg, scriptsOpts)
