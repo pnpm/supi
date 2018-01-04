@@ -4,8 +4,6 @@
 
 # supi
 
-[![Greenkeeper badge](https://badges.greenkeeper.io/pnpm/supi.svg)](https://greenkeeper.io/)
-
 [![Status](https://travis-ci.org/pnpm/supi.svg?branch=master)](https://travis-ci.org/pnpm/supi "See test builds")
 [![Windows build status](https://ci.appveyor.com/api/projects/status/18j52s5bdd71pjy5/branch/master?svg=true)](https://ci.appveyor.com/project/zkochan/supi/branch/master)
 
