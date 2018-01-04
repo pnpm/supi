@@ -65,7 +65,7 @@ import thenify = require('thenify')
 import child_process = require('child_process')
 import {rebuild} from './rebuild';
 
-const execPromise = thenify(child_process)
+const execPromise = thenify(child_process.execFile)
 
 export type InstalledPackages = {
   [name: string]: InstalledPackage
