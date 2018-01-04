@@ -32,6 +32,7 @@ export default async function linkPackages (
   tree: {[nodeId: string]: TreeNode},
   opts: {
     force: boolean,
+    dryRun: boolean,
     global: boolean,
     baseNodeModules: string,
     bin: string,
@@ -68,6 +69,7 @@ export default async function linkPackages (
   const newShr = updateShrinkwrap(pkgsToLink, opts.wantedShrinkwrap, opts.pkg)
 
   const removedPkgIds = await removeOrphanPkgs({
+    dryRun: opts.dryRun,
     oldShrinkwrap: opts.currentShrinkwrap,
     newShrinkwrap: newShr,
     prefix: opts.root,
@@ -109,8 +111,7 @@ export default async function linkPackages (
   for (let rootAlias of R.keys(resolvePeersResult.rootAbsolutePathsByAlias)) {
     const pkg = rootPkgsToLinkByAbsolutePath[resolvePeersResult.rootAbsolutePathsByAlias[rootAlias]]
     if (!pkg) continue
-    const symlinkingResult = await symlinkDependencyTo(rootAlias, pkg, opts.baseNodeModules)
-    if (!symlinkingResult.reused) {
+    if (opts.dryRun || !(await symlinkDependencyTo(rootAlias, pkg, opts.baseNodeModules)).reused) {
       const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
       const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
       rootLogger.info({
@@ -129,7 +130,9 @@ export default async function linkPackages (
       pkgId: pkg.id,
     })
   }
-  await linkBins(opts.baseNodeModules, opts.bin)
+  if (!opts.dryRun) {
+    await linkBins(opts.baseNodeModules, opts.bin)
+  }
 
   if (opts.updateShrinkwrapMinorVersion) {
     // Setting `shrinkwrapMinorVersion` is a temporary solution to
@@ -201,6 +204,7 @@ async function linkNewPackages (
   wantedShrinkwrap: Shrinkwrap,
   pkgsToLink: DependencyTreeNodeMap,
   opts: {
+    dryRun: boolean,
     force: boolean,
     global: boolean,
     baseNodeModules: string,
@@ -223,7 +227,9 @@ async function linkNewPackages (
     // just skip the ones that are in the lockfile but were not analyzed
     .filter(resolvedId => pkgsToLink[resolvedId])
   )
+  statsLogger.debug({added: newPkgResolvedIdsSet.size})
 
+  const existingWithUpdatedDeps = []
   if (!opts.force && currentShrinkwrap.packages && wantedShrinkwrap.packages) {
     // add subdependencies that have been updated
     // TODO: no need to relink everything. Can be relinked only what was changed
@@ -235,21 +241,24 @@ async function linkNewPackages (
 
         // TODO: come up with a test that triggers the usecase of pkgsToLink[resolvedId] undefined
         // see related issue: https://github.com/pnpm/pnpm/issues/870
-        if (pkgsToLink[resolvedId]) {
-          newPkgResolvedIdsSet.add(resolvedId)
+        if (pkgsToLink[resolvedId] && !newPkgResolvedIdsSet.has(resolvedId)) {
+          existingWithUpdatedDeps.push(pkgsToLink[resolvedId])
         }
       }
     }
   }
 
-  statsLogger.debug({added: newPkgResolvedIdsSet.size})
-  if (!newPkgResolvedIdsSet.size) return []
+  if (!newPkgResolvedIdsSet.size && !existingWithUpdatedDeps.length) return []
 
   const newPkgResolvedIds = Array.from(newPkgResolvedIdsSet)
+
+  if (opts.dryRun) return newPkgResolvedIds
+
   const newPkgs = R.props<string, DependencyTreeNode>(newPkgResolvedIds, pkgsToLink)
 
   await Promise.all([
     linkAllModules(newPkgs, pkgsToLink, {optional: opts.optional}),
+    linkAllModules(existingWithUpdatedDeps, pkgsToLink, {optional: opts.optional}),
     (async () => {
       // this works in the following way:
       // - hardlink: hardlink the packages, no fallback
