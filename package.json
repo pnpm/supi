@@ -84,9 +84,9 @@
     "write-yaml-file": "^1.0.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^4.2.0",
-    "@commitlint/config-angular": "^4.2.0",
-    "@commitlint/prompt-cli": "^4.2.0",
+    "@commitlint/cli": "^5.2.8",
+    "@commitlint/config-angular": "^5.1.1",
+    "@commitlint/prompt-cli": "^5.2.8",
     "@pnpm/logger": "^1.0.0",
     "@types/mkdirp": "^0.5.1",
     "@types/sinon": "^4.1.2",
