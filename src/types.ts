@@ -18,9 +18,12 @@ export type WantedDependency = {
 
 export type SupiOptions = PnpmOptions & {
   storeController?: StoreController
+  pending?: boolean
+  customInstall?: string
 }
 
 export type StrictSupiOptions = StrictPnpmOptions & {
   storeController?: StoreController
-  pending?: boolean
+  pending: boolean
+  customInstall?: string
 }
