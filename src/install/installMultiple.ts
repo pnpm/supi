@@ -31,6 +31,10 @@ import {
 import depsToSpecs from '../depsToSpecs'
 import getIsInstallable from './getIsInstallable'
 import getPkgInfoFromShr from '../getPkgInfoFromShr'
+import {
+  nodeIdContainsSequence,
+  createNodeId,
+} from '../nodeIdUtils'
 import semver = require('semver')
 
 export type PkgAddress = {
@@ -296,7 +300,7 @@ async function install (
     return null
   }
 
-  if (options.parentNodeId.indexOf(`:${dependentId}:${pkgResponse.body.id}:`) !== -1) {
+  if (nodeIdContainsSequence(options.parentNodeId, dependentId, pkgResponse.body.id)) {
     return null
   }
 
@@ -345,7 +349,7 @@ async function install (
   logStatus({status: 'downloaded_manifest', pkgId: pkgResponse.body.id, pkgVersion: pkg.version})
 
   // using colon as it will never be used inside a package ID
-  const nodeId = `${options.parentNodeId}${pkgResponse.body.id}:`
+  const nodeId = createNodeId(options.parentNodeId, pkgResponse.body.id)
 
   const currentIsInstallable = (
       ctx.force ||
