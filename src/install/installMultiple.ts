@@ -72,6 +72,7 @@ export type InstalledPackage = {
     cpu?: string[],
     os?: string[],
   },
+  sideEffectsCache: Map<string, string>,
 }
 
 export default async function installMultiple (
@@ -90,6 +91,7 @@ export default async function installMultiple (
     update: boolean,
     readPackageHook?: ReadPackageHook,
     hasManifestInShrinkwrap: boolean,
+    sideEffectsCache: boolean,
   }
 ): Promise<PkgAddress[]> {
   const resolvedDependencies = options.resolvedDependencies || {}
@@ -124,6 +126,7 @@ export default async function installMultiple (
               hasManifestInShrinkwrap: options.hasManifestInShrinkwrap,
               update,
               proceed,
+              sideEffectsCache: options.sideEffectsCache,
             },
             getInfoFromShrinkwrap(ctx.wantedShrinkwrap, reference, wantedDependency.alias, ctx.registry)))
         })
@@ -235,6 +238,7 @@ async function install (
     proceed: boolean,
     readPackageHook?: ReadPackageHook,
     hasManifestInShrinkwrap: boolean,
+    sideEffectsCache: boolean,
   }
 ): Promise<PkgAddress | null> {
   const keypath = options.keypath || []
@@ -277,6 +281,7 @@ async function install (
     downloadPriority: -options.currentDepth,
     preferredVersions: ctx.preferredVersions,
     skipFetch: ctx.dryRun,
+    sideEffectsCache: options.sideEffectsCache
   })
 
   pkgResponse.body.id = encodePkgId(pkgResponse.body.id)
@@ -403,7 +408,8 @@ async function install (
         engines: pkg.engines,
         cpu: pkg.cpu,
         os: pkg.os,
-      }
+      },
+      sideEffectsCache: pkgResponse.body.sideEffectsCache,
     }
     const children = await installDependencies(
       pkg,
@@ -424,6 +430,7 @@ async function install (
         readPackageHook: options.readPackageHook,
         hasManifestInShrinkwrap: options.hasManifestInShrinkwrap,
         useManifestInfoFromShrinkwrap,
+        sideEffectsCache: options.sideEffectsCache,
       }
     )
     ctx.childrenByParentId[pkgResponse.body.id] = children.map(child => ({
@@ -508,6 +515,7 @@ async function installDependencies (
     readPackageHook?: ReadPackageHook,
     hasManifestInShrinkwrap: boolean,
     useManifestInfoFromShrinkwrap: boolean,
+    sideEffectsCache: boolean,
   }
 ): Promise<PkgAddress[]> {
 

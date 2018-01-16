@@ -53,6 +53,8 @@ export type DependencyTreeNode = {
     cpu?: string[],
     os?: string[],
   },
+  sideEffectsCache: Map<string, string>,
+  importedFromCache?: boolean,
 }
 
 export type DependencyTreeNodeMap = {
@@ -192,6 +194,7 @@ function resolvePeersOfNode (
       id: node.pkg.id,
       installable: node.installable,
       additionalInfo: node.pkg.additionalInfo,
+      sideEffectsCache: node.pkg.sideEffectsCache,
     }
   }
   return allResolvedPeers

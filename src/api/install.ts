@@ -380,6 +380,7 @@ async function installInContext (
     currentDepth: 0,
     readPackageHook: opts.hooks.readPackage,
     hasManifestInShrinkwrap,
+    sideEffectsCache: opts.sideEffectsCache,
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     async (wantedDependency: WantedDependency) => {
@@ -538,6 +539,7 @@ async function installInContext (
     makePartialCurrentShrinkwrap,
     updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
     outdatedPkgs: installCtx.outdatedPkgs,
+    sideEffectsCache: opts.sideEffectsCache,
   })
 
   ctx.pendingBuilds = ctx.pendingBuilds
@@ -573,6 +575,9 @@ async function installInContext (
         R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
           .map(pkg => limitChild(async () => {
             try {
+              if (pkg.importedFromCache) {
+                return
+              }
               const hasSideEffects = await postInstall(pkg.peripheralLocation, {
                 rawNpmConfig: installCtx.rawNpmConfig,
                 initialWD: ctx.root,
