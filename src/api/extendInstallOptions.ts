@@ -32,6 +32,8 @@ export type InstallOptions = {
   savePrefix?: string,
   saveDev?: boolean,
   saveOptional?: boolean,
+  sideEffectsCache?: boolean,
+  sideEffectsCacheReadonly?: boolean,
   global?: boolean,
   bin?: string,
   production?: boolean,
@@ -71,6 +73,8 @@ export type StrictInstallOptions = InstallOptions & {
   savePrefix: string,
   saveDev: boolean,
   saveOptional: boolean,
+  sideEffectsCache: boolean,
+  sideEffectsCacheReadonly: boolean,
   global: boolean,
   bin: string,
   production: boolean,
@@ -124,6 +128,8 @@ const defaults = async (opts: InstallOptions) => {
     verifyStoreIntegrity: true,
     hooks: {},
     savePrefix: '^',
+    sideEffectsCache: false,
+    sideEffectsCacheReadonly: false,
     unsafePerm: process.platform === 'win32' ||
                 process.platform === 'cygwin' ||
                 !(process.getuid && process.setuid &&

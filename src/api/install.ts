@@ -573,13 +573,16 @@ async function installInContext (
         R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
           .map(pkg => limitChild(async () => {
             try {
-              await postInstall(pkg.peripheralLocation, {
+              const hasSideEffects = await postInstall(pkg.peripheralLocation, {
                 rawNpmConfig: installCtx.rawNpmConfig,
                 initialWD: ctx.root,
                 userAgent: opts.userAgent,
                 pkgId: pkg.id,
                 unsafePerm: opts.unsafePerm || false,
               })
+              if (hasSideEffects && opts.sideEffectsCache && !opts.sideEffectsCacheReadonly) {
+                await installCtx.storeController.upload(process.version, pkg)
+              }
             } catch (err) {
               if (installCtx.installs[pkg.id].optional) {
                 logger.warn({
