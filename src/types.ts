@@ -1,151 +1,28 @@
-import {PackageMeta} from 'package-store'
-import {Log} from 'pnpm-logger'
+import {
+  Dependencies,
+  PackageBin,
+  PackageManifest,
+  PnpmOptions,
+  StrictPnpmOptions,
+} from '@pnpm/types'
+import {LogBase} from '@pnpm/logger'
+import {StoreController} from 'package-store'
 
-export type PnpmOptions = {
-  rawNpmConfig?: Object,
-  global?: boolean,
-  prefix?: string,
-  bin?: string,
-  ignoreScripts?: boolean
-  save?: boolean,
-  saveProd?: boolean,
-  saveDev?: boolean,
-  saveOptional?: boolean,
-  production?: boolean,
-  fetchRetries?: number,
-  fetchRetryFactor?: number,
-  fetchRetryMintimeout?: number,
-  fetchRetryMaxtimeout?: number,
-  saveExact?: boolean,
-  force?: boolean,
-  depth?: number,
-  engineStrict?: boolean,
-  nodeVersion?: string,
-  offline?: boolean,
-  registry?: string,
-  optional?: boolean,
-
-  // proxy
-  proxy?: string,
-  httpsProxy?: string,
-  localAddress?: string,
-
-  // ssl
-  cert?: string,
-  key?: string,
-  ca?: string,
-  strictSsl?: boolean,
-
-  userAgent?: string,
-  tag?: string,
-
-  metaCache?: Map<string, PackageMeta>,
-  alwaysAuth?: boolean,
-
-  // pnpm specific configs
-  storePath?: string, // DEPRECATED! store should be used
-  store?: string,
-  verifyStoreIntegrity?: boolean,
-  networkConcurrency?: number,
-  fetchingConcurrency?: number,
-  lockStaleDuration?: number,
-  lock?: boolean,
-  childConcurrency?: number,
-  repeatInstallDepth?: number,
-  independentLeaves?: boolean,
-
-  // cannot be specified via configs
-  update?: boolean,
-  reporter?: (logObj: Log) => void,
-  packageManager?: {
-    name: string,
-    version: string,
-  },
-}
-
-export type StrictPnpmOptions = PnpmOptions & {
-  rawNpmConfig: Object,
-  global: boolean,
-  prefix: string,
-  bin: string,
-  ignoreScripts: boolean
-  save: boolean,
-  saveProd: boolean,
-  saveDev: boolean,
-  saveOptional: boolean,
-  production: boolean,
-  fetchRetries: number,
-  fetchRetryFactor: number,
-  fetchRetryMintimeout: number,
-  fetchRetryMaxtimeout: number,
-  saveExact: boolean,
-  force: boolean,
-  depth: number,
-  engineStrict: boolean,
-  nodeVersion: string,
-  offline: boolean,
-  registry: string,
+export type WantedDependency = {
+  alias?: string,
+  pref: string, // package reference
+  dev: boolean,
   optional: boolean,
-
-  // proxy
-  proxy?: string,
-  httpsProxy?: string,
-  localAddress?: string,
-
-  // ssl
-  cert?: string,
-  key?: string,
-  ca?: string,
-  strictSsl: boolean,
-
-  userAgent: string,
-  tag: string,
-
-  metaCache: Map<string, PackageMeta>,
-  alwaysAuth: boolean,
-
-  // pnpm specific configs
-  store: string,
-  verifyStoreIntegrity: boolean,
-  networkConcurrency: number,
-  fetchingConcurrency: number,
-  lockStaleDuration: number,
-  lock: boolean,
-  childConcurrency: number,
-  repeatInstallDepth: number,
-  independentLeaves: boolean,
-  locks: string,
-
-  // cannot be specified via configs
-  update: boolean,
-  packageManager: {
-    name: string,
-    version: string,
-  },
+  raw: string, // might be not needed
 }
 
-export type Dependencies = {
-  [name: string]: string
+export type SupiOptions = PnpmOptions & {
+  storeController: StoreController
 }
 
-export type PackageBin = string | {[name: string]: string}
-
-export type Package = {
-  name: string,
-  version: string,
-  private?: boolean,
-  bin?: PackageBin,
-  directories?: {
-    bin?: string,
-  },
-  dependencies?: Dependencies,
-  devDependencies?: Dependencies,
-  optionalDependencies?: Dependencies,
-  peerDependencies?: Dependencies,
-  bundleDependencies?: string[],
-  bundledDependencies?: string[],
-  scripts?: {
-    [name: string]: string
-  },
-  config?: Object,
+export type StrictSupiOptions = StrictPnpmOptions & {
+  storeController: StoreController
+  pending?: boolean
 }
+
+export type ReporterFunction = (logObj: LogBase) => void

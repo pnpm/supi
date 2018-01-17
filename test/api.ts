@@ -1,5 +1,6 @@
 import test = require('tape')
-import * as pnpm from '../src'
+import * as pnpm from 'supi'
+import {testDefaults} from './utils'
 
 test('API', t => {
   t.equal(typeof pnpm.install, 'function', 'exports install()')
@@ -18,10 +19,20 @@ test('API', t => {
 // the dependency will be saved
 test.skip('install fails when all saving types are false', async (t: test.Test) => {
   try {
-    await pnpm.install({save: false, saveDev: false, saveOptional: false})
+    await pnpm.install(await testDefaults({save: false, saveDev: false, saveOptional: false}))
     t.fail('installation should have failed')
   } catch (err) {
     t.equal(err.message, 'Cannot install with save/saveDev/saveOptional all being equal false')
+    t.end()
+  }
+})
+
+test('install fails on optional = true but production = false', async (t: test.Test) => {
+  try {
+    await pnpm.install(await testDefaults({optional: true, production: false}))
+    t.fail('installation should have failed')
+  } catch (err) {
+    t.equal(err.message, 'Optional dependencies cannot be installed without production dependencies')
     t.end()
   }
 })

@@ -1,23 +1,23 @@
 import loadJsonFile = require('load-json-file')
 import writePkg = require('write-pkg')
 import {DependenciesType, dependenciesTypes} from './getSaveType'
-import {Package} from './types'
-import {PackageSpec} from 'package-store'
+import {PackageJson} from '@pnpm/types'
+import {packageJsonLogger} from './loggers'
 
 export default async function save (
   pkgJsonPath: string,
   packageSpecs: ({
     name: string,
-    saveSpec: string,
+    pref: string,
   })[],
   saveType?: DependenciesType
-): Promise<Package> {
+): Promise<PackageJson> {
   // Read the latest version of package.json to avoid accidental overwriting
   const packageJson = await loadJsonFile(pkgJsonPath)
   if (saveType) {
     packageJson[saveType] = packageJson[saveType] || {}
     packageSpecs.forEach(dependency => {
-      packageJson[saveType][dependency.name] = dependency.saveSpec
+      packageJson[saveType][dependency.name] = dependency.pref
       dependenciesTypes.filter(deptype => deptype !== saveType).forEach(deptype => {
         if (packageJson[deptype]) {
           delete packageJson[deptype][dependency.name]
@@ -28,15 +28,16 @@ export default async function save (
     packageSpecs.forEach(dependency => {
       const usedDepType = guessDependencyType(dependency.name, packageJson) || 'dependencies'
       packageJson[usedDepType] = packageJson[usedDepType] || {}
-      packageJson[usedDepType][dependency.name] = dependency.saveSpec
+      packageJson[usedDepType][dependency.name] = dependency.pref
     })
   }
 
   await writePkg(pkgJsonPath, packageJson)
+  packageJsonLogger.debug({ updated: packageJson })
   return packageJson
 }
 
-function guessDependencyType (depName: string, pkg: Package): DependenciesType | undefined {
+function guessDependencyType (depName: string, pkg: PackageJson): DependenciesType | undefined {
   return dependenciesTypes
     .find(deptype => Boolean(pkg[deptype] && pkg[deptype]![depName]))
 }

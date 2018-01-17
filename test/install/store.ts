@@ -4,14 +4,14 @@ import path = require('path')
 import rimraf = require('rimraf-then')
 import {prepare, testDefaults} from '../utils'
 import writeJsonFile = require('write-json-file')
-import {install, installPkgs} from '../../src'
+import {install, installPkgs} from 'supi'
 
 const test = promisifyTape(tape)
 
 test('repeat install with corrupted `store.json` should work', async (t: tape.Test) => {
   const project = prepare(t)
 
-  const opts = testDefaults()
+  const opts = await testDefaults()
   await installPkgs(['is-negative@1.0.0'], opts)
 
   await rimraf('node_modules')

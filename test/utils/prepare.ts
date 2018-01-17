@@ -24,7 +24,8 @@ export default function prepare (t: Test, pkg?: Object) {
   const dirname = dirNumber.toString()
   const pkgTmpPath = path.join(tmpPath, dirname, 'project')
   mkdirp.sync(pkgTmpPath)
-  writePkg.sync(pkgTmpPath, Object.assign({name: 'project', version: '0.0.0'}, pkg))
+  let pkgJson = Object.assign({name: 'project', version: '0.0.0'}, pkg)
+  writePkg.sync(pkgTmpPath, pkgJson)
   process.chdir(pkgTmpPath)
   t.pass(`create testing package ${dirname}`)
 
@@ -58,11 +59,13 @@ export default function prepare (t: Test, pkg?: Object) {
       return path.join(await project.getStorePath(), pkgFolder, 'package')
     },
     storeHas: async function (pkgName: string, version?: string) {
-      t.ok(await exists(await project.resolve(pkgName, version)), `${pkgName}@${version} is in store`)
+      const pathToCheck = await project.resolve(pkgName, version)
+      t.ok(await exists(pathToCheck), `${pkgName}@${version} is in store (at ${pathToCheck})`)
     },
     storeHasNot: async function (pkgName: string, version?: string) {
       try {
-        t.notOk(await exists(await project.resolve(pkgName, version)), `${pkgName}@${version} is not in store`)
+        const pathToCheck = await project.resolve(pkgName, version)
+        t.notOk(await exists(pathToCheck), `${pkgName}@${version} is not in store (at ${pathToCheck})`)
       } catch (err) {
         if (err.message === 'Cannot find module store') {
           t.pass(`${pkgName}@${version} is not in store`)
@@ -81,6 +84,26 @@ export default function prepare (t: Test, pkg?: Object) {
         if (err.code === 'ENOENT') return null
         throw err
       }
+    },
+    loadCurrentShrinkwrap: async () => {
+      try {
+        return await loadYamlFile<any>('node_modules/.shrinkwrap.yaml') // tslint:disable-line
+      } catch (err) {
+        if (err.code === 'ENOENT') return null
+        throw err
+      }
+    },
+    loadModules: async () => {
+      try {
+        return await loadYamlFile<any>('node_modules/.modules.yaml') // tslint:disable-line
+      } catch (err) {
+        if (err.code === 'ENOENT') return null
+        throw err
+      }
+    },
+    rewriteDependencies: async (deps) => {
+      pkgJson = Object.assign(pkgJson, { dependencies: deps })
+      writePkg.sync(pkgTmpPath, pkgJson)
     },
   }
   return project

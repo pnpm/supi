@@ -5,7 +5,7 @@ import {
   prepare,
   testDefaults,
 } from '../utils'
-import {installPkgs, install} from '../../src'
+import {installPkgs, install} from 'supi'
 import registryMock = require('pnpm-registry-mock')
 import RegClient = require('anonymous-npm-registry-client')
 import rimraf = require('rimraf-then')
@@ -27,10 +27,14 @@ test('a package that need authentication', async function (t: tape.Test) {
     }, (err: Error, data: Object) => err ? reject(err) : resolve(data))
   })
 
-  await installPkgs(['needs-auth'], testDefaults({
-    rawNpmConfig: {
-      '//localhost:4873/:_authToken': data['token'],
-    },
+  let rawNpmConfig = {
+    registry: 'http://localhost:4873/',
+    '//localhost:4873/:_authToken': data['token'],
+  }
+  await installPkgs(['needs-auth'], await testDefaults({}, {
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   }))
 
   const m = project.requireModule('needs-auth')
@@ -42,15 +46,18 @@ test('a package that need authentication', async function (t: tape.Test) {
   await rimraf('node_modules')
   await rimraf(path.join('..', '.store'))
 
-  await installPkgs(['needs-auth'], testDefaults({
+  rawNpmConfig = {
     registry: 'https://registry.npmjs.org/',
-    rawNpmConfig: {
-      registry: 'https://registry.npmjs.org/',
-      '//localhost:4873/:_authToken': data['token'],
-    },
+    '//localhost:4873/:_authToken': data['token'],
+  }
+  await installPkgs(['needs-auth'], await testDefaults({}, {
+    registry: 'https://registry.npmjs.org/',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   }))
 
-  project.has('needs-auth')
+  await project.has('needs-auth')
 })
 
 test('a package that need authentication, legacy way', async function (t: tape.Test) {
@@ -68,12 +75,15 @@ test('a package that need authentication, legacy way', async function (t: tape.T
     }, (err: Error, data: Object) => err ? reject(err) : resolve(data))
   })
 
-  await installPkgs(['needs-auth'], testDefaults({
-    rawNpmConfig: {
-      '_auth': 'Zm9vOmJhcg==', // base64 encoded foo:bar
-      'always-auth': true,
-      registry: 'http://localhost:4873',
-    },
+  const rawNpmConfig = {
+    '_auth': 'Zm9vOmJhcg==', // base64 encoded foo:bar
+    'always-auth': true,
+    registry: 'http://localhost:4873',
+  }
+  await installPkgs(['needs-auth'], await testDefaults({}, {
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   }))
 
   const m = project.requireModule('needs-auth')
@@ -96,25 +106,35 @@ test('a scoped package that need authentication specific to scope', async functi
     }, (err: Error, data: Object) => err ? reject(err) : resolve(data))
   })
 
-  const opts = testDefaults({
+  const rawNpmConfig = {
     registry: 'https://registry.npmjs.org/',
-    rawNpmConfig: {
-      registry: 'https://registry.npmjs.org/',
-      '@private:registry': 'http://localhost:4873/',
-      '//localhost:4873/:_authToken': data['token'],
-    },
+    '@private:registry': 'http://localhost:4873/',
+    '//localhost:4873/:_authToken': data['token'],
+  }
+  let opts = await testDefaults({}, {
+    registry: 'https://registry.npmjs.org/',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   })
   await installPkgs(['@private/foo'], opts)
 
-  project.has('@private/foo')
+  await project.has('@private/foo')
 
   // should work when a shrinkwrap is available
   await rimraf('node_modules')
   await rimraf(path.join('..', '.store'))
 
+  // Recreating options to have a new storeController with clean cache
+  opts = await testDefaults({}, {
+    registry: 'https://registry.npmjs.org/',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
+  })
   await installPkgs(['@private/foo'], opts)
 
-  project.has('@private/foo')
+  await project.has('@private/foo')
 })
 
 test('a package that need authentication reuses authorization tokens for tarball fetching', async function (t: tape.Test) {
@@ -132,12 +152,18 @@ test('a package that need authentication reuses authorization tokens for tarball
     }, (err: Error, data: Object) => err ? reject(err) : resolve(data))
   })
 
-  await installPkgs(['needs-auth'], testDefaults({
+  const rawNpmConfig = {
     registry: 'http://127.0.0.1:4873',
-    rawNpmConfig: {
-      '//127.0.0.1:4873/:_authToken': data['token'],
-      '//127.0.0.1:4873/:always-auth': true,
-    },
+    '//127.0.0.1:4873/:_authToken': data['token'],
+    '//127.0.0.1:4873/:always-auth': true,
+  }
+  await installPkgs(['needs-auth'], await testDefaults({
+    registry: 'http://127.0.0.1:4873',
+  }, {
+    registry: 'http://127.0.0.1:4873',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   }))
 
   const m = project.requireModule('needs-auth')
@@ -160,12 +186,18 @@ test('a package that need authentication reuses authorization tokens for tarball
     }, (err: Error, data: Object) => err ? reject(err) : resolve(data))
   })
 
-  const opts = testDefaults({
+  const rawNpmConfig = {
     registry: 'http://127.0.0.1:4873',
-    rawNpmConfig: {
-      '//127.0.0.1:4873/:_authToken': data['token'],
-      '//127.0.0.1:4873/:always-auth': true,
-    },
+    '//127.0.0.1:4873/:_authToken': data['token'],
+    '//127.0.0.1:4873/:always-auth': true,
+  }
+  let opts = await testDefaults({
+    registry: 'http://127.0.0.1:4873',
+  }, {
+    registry: 'http://127.0.0.1:4873',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
   })
 
   await installPkgs(['needs-auth'], opts)
@@ -174,6 +206,15 @@ test('a package that need authentication reuses authorization tokens for tarball
   await rimraf(path.join('..', '.registry'))
   await rimraf(path.join('..', '.store'))
 
+  // Recreating options to clean store cache
+  opts = await testDefaults({
+    registry: 'http://127.0.0.1:4873',
+  }, {
+    registry: 'http://127.0.0.1:4873',
+    rawNpmConfig,
+  }, {
+    rawNpmConfig,
+  })
   await install(opts)
 
   const m = project.requireModule('needs-auth')

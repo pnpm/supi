@@ -17,10 +17,10 @@ Install it via npm.
 npm install supi
 ```
 
-It also depends on `pnpm-logger` version `0.5`, so install it as well via:
+It also depends on `@pnpm/logger` version `1`, so install it as well via:
 
 ```
-npm install pnpm-logger@0.5
+npm install @pnpm/logger@1
 ```
 
 ## API
@@ -32,18 +32,18 @@ Install packages.
 **Arguments:**
 
 * `pkgsToInstall` - *Object | String[]* - either an object that maps package names to version ranges or inputs usually passed to `npm install` (e.g., `foo@1.0.0`, `foo`).
+* `options.storeController` - *Object* - required. An object that does all the manipulations with the store.
+* `options.store` - *String* - required. Location of the store.
 * `options.saveProd` - *Boolean* - package will appear in `dependencies`.
 * `options.saveDev` - *Boolean* - package will appear in `devDependencies`.
 * `options.saveOptional` - *Boolean* - package will appear in `optionalDependencies`.
 * `options.saveExact` - *Boolean* - saved dependencies will be configured with an exact version rather than using npm's default semver range operator.
 * `options.global` - *Boolean* - the packages will be installed globally rather than locally.
 * `options.prefix` - *String* - the directory in which the installation will be performed. By default the `process.cwd()` value is used.
-* `options.quiet` - *Boolean* - `false` by default. No output to the console.
-* `options.metaCache` - *Map* - a cache for package meta info.
-* `options.networkConcurrency` - *Number* - `16` by default. Max amount of network requests to perform concurrently.
-* `options.offline` - *Boolean* - `false` by default. Install packages using only the local registry mirror, w/o doing any network requests.
 * `options.reporter` - *Function* - A function that listens for logs.
 * `options.packageManager` - *Object* - The `package.json` of the package manager.
+* `options.hooks` - *Object* - A property that contains installation hooks. Hooks are [documented separately](#hooks).
+* `options.shrinkwrapOnly` - *Boolean* - `false` by default. When `true`, only updates `shrinkwrap.yaml` and `package.json` instead of checking `node_modules` and downloading dependencies.
 
 **Returns:** a Promise
 
@@ -52,10 +52,10 @@ Install packages.
 ```js
 const pnpm = require('pnpm')
 
-pnpm.install({
+pnpm.installPkgs({
   'is-positive': '1.0.0',
   'hello-world': '^2.3.1'
-}, { save: true, quiet: true })
+}, { saveDev: true })
 ```
 
 ### `supi.install([options])`
@@ -64,7 +64,10 @@ Install all modules listed as dependencies in `package.json`.
 
 **Arguments:** (same as in named install and additionally)
 
-* `options.production` - *Boolean* - `false` by default or `true` when the `NODE_ENV` environment variable is set to `production`. Modules listed in `devDependencies` will not be installed.
+* `options.production` - *Boolean* - `true` by default. If `true`, packages listed in `dependencies` will be installed.
+* `options.development` - *Boolean* - `true` by default. If `true`, packages listed in `devDependencies` will be installed.
+* `options.optional` - *Boolean* - Has the value of `options.production` by default. If `true`, packages listed in `optionalDependencies` will be installed.
+  Can be `true` only when `options.production` is `true` as well.
 
 ### `supi.uninstall(pkgsToUninstall, [options])`
 
@@ -155,6 +158,34 @@ not in the projects `node_modules` folder.
 ### `supi.storePrune([options])`
 
 Remove unreferenced packages from the store.
+
+## Hooks
+
+Hooks are functions that can step into the installation process.
+
+### `readPackage(pkg)`
+
+This hook is called with every dependency's manifest information.
+The modified manifest returned by this hook is then used by supi during installation.
+
+**Example:**
+
+```js
+const supi = require('supi')
+
+supi.installPkgs({
+  hooks: {readPackage}
+})
+
+function readPackage (pkg) {
+  if (pkg.name === 'foo') {
+    pkg.dependencies = {
+      bar: '^2.0.0',
+    }
+  }
+  return pkg
+}
+```
 
 ## Acknowledgements
 

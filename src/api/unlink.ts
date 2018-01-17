@@ -1,8 +1,10 @@
 import path = require('path')
-import {PnpmOptions, StrictPnpmOptions} from '../types'
-import extendOptions from './extendOptions'
+import extendOptions, {
+  InstallOptions,
+  StrictInstallOptions,
+} from './extendInstallOptions'
 import isInnerLink = require('is-inner-link')
-import logger, {streamParser} from 'pnpm-logger'
+import logger, {streamParser} from '@pnpm/logger'
 import rimraf = require('rimraf-then')
 import {installPkgs} from './install'
 import {fromDir as readPkgFromDir} from '../fs/readPkg'
@@ -15,13 +17,13 @@ import isSubdir = require('is-subdir')
 
 export async function unlinkPkgs (
   pkgNames: string[],
-  maybeOpts: PnpmOptions
+  maybeOpts: InstallOptions
 ) {
   const reporter = maybeOpts && maybeOpts.reporter
   if (reporter) {
     streamParser.on('data', reporter)
   }
-  const opts = _extendOptions(maybeOpts)
+  const opts = await _extendOptions(maybeOpts)
   const modulesYaml = await readModules(opts.prefix)
   opts.store = modulesYaml && modulesYaml.store || opts.store
 
@@ -34,7 +36,7 @@ export async function unlinkPkgs (
 
 export async function _unlinkPkgs (
   pkgNames: string[],
-  opts: StrictPnpmOptions
+  opts: StrictInstallOptions
 ) {
   const modules = path.join(opts.prefix, 'node_modules')
   const pkg = await readPkgFromDir(opts.prefix)
@@ -57,12 +59,12 @@ export async function _unlinkPkgs (
   await installPkgs(packagesToInstall, opts)
 }
 
-export async function unlink (maybeOpts: PnpmOptions) {
+export async function unlink (maybeOpts: InstallOptions) {
   const reporter = maybeOpts && maybeOpts.reporter
   if (reporter) {
     streamParser.on('data', reporter)
   }
-  const opts = _extendOptions(maybeOpts)
+  const opts = await _extendOptions(maybeOpts)
   const modulesYaml = await readModules(opts.prefix)
   opts.store = modulesYaml && modulesYaml.store || opts.store
 
@@ -109,8 +111,8 @@ async function isExternalLink (store: string, modules: string, pkgName: string) 
   return !link.isInner && !isSubdir(store, link.target)
 }
 
-function _extendOptions (maybeOpts: PnpmOptions): StrictPnpmOptions {
+async function _extendOptions (maybeOpts: InstallOptions): Promise<StrictInstallOptions> {
   maybeOpts = maybeOpts || {}
   if (maybeOpts.depth === undefined) maybeOpts.depth = -1
-  return extendOptions(maybeOpts)
+  return await extendOptions(maybeOpts)
 }

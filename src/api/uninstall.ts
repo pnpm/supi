@@ -1,34 +1,41 @@
 import rimraf = require('rimraf-then')
 import path = require('path')
+import * as dp from 'dependency-path'
 import getContext, {PnpmContext} from './getContext'
 import getSaveType from '../getSaveType'
 import removeDeps from '../removeDeps'
-import extendOptions from './extendOptions'
-import {PnpmOptions, StrictPnpmOptions, Package} from '../types'
+import extendOptions, {
+  UninstallOptions,
+  StrictUninstallOptions,
+} from './extendUninstallOptions'
+import {PnpmOptions, StrictPnpmOptions} from '@pnpm/types'
 import lock from './lock'
 import {
   Shrinkwrap,
   write as saveShrinkwrap,
   prune as pruneShrinkwrap,
 } from 'pnpm-shrinkwrap'
-import logger, {streamParser} from 'pnpm-logger'
+import logger, {streamParser} from '@pnpm/logger'
 import {
   save as saveModules,
   LAYOUT_VERSION,
 } from '../fs/modulesController'
 import removeOrphanPkgs from './removeOrphanPkgs'
-import {PackageSpec} from 'package-store'
 import safeIsInnerLink from '../safeIsInnerLink'
 import removeTopDependency from '../removeTopDependency'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
+import { SupiOptions, StrictSupiOptions } from '../types';
 
-export default async function uninstall (pkgsToUninstall: string[], maybeOpts?: PnpmOptions) {
+export default async function uninstall (
+  pkgsToUninstall: string[],
+  maybeOpts: UninstallOptions,
+) {
   const reporter = maybeOpts && maybeOpts.reporter
   if (reporter) {
     streamParser.on('data', reporter)
   }
 
-  const opts = extendOptions(maybeOpts)
+  const opts = await extendOptions(maybeOpts)
 
   if (opts.lock) {
     await lock(opts.prefix, _uninstall, {stale: opts.lockStaleDuration, locks: opts.locks})
@@ -47,43 +54,41 @@ export default async function uninstall (pkgsToUninstall: string[], maybeOpts?: 
       throw new Error('No package.json found - cannot uninstall')
     }
 
-    if (opts.lock === false) {
-      return run()
-    }
-
-    return lock(ctx.storePath, run, {stale: opts.lockStaleDuration, locks: opts.locks})
-
-    function run () {
-      return uninstallInContext(pkgsToUninstall, ctx, opts)
-    }
+    return uninstallInContext(pkgsToUninstall, ctx, opts)
   }
 }
 
-export async function uninstallInContext (pkgsToUninstall: string[], ctx: PnpmContext, opts: StrictPnpmOptions) {
-  const makePartialPrivateShrinkwrap = !shrinkwrapsEqual(ctx.privateShrinkwrap, ctx.shrinkwrap)
+export async function uninstallInContext (
+  pkgsToUninstall: string[],
+  ctx: PnpmContext,
+  opts: StrictUninstallOptions,
+) {
+  const makePartialCurrentShrinkwrap = !shrinkwrapsEqual(ctx.currentShrinkwrap, ctx.wantedShrinkwrap)
 
   const pkgJsonPath = path.join(ctx.root, 'package.json')
   const saveType = getSaveType(opts)
   const pkg = await removeDeps(pkgJsonPath, pkgsToUninstall, saveType)
-  const newShr = pruneShrinkwrap(ctx.shrinkwrap, pkg)
+  const newShr = pruneShrinkwrap(ctx.wantedShrinkwrap, pkg)
   const removedPkgIds = await removeOrphanPkgs({
-    oldShrinkwrap: ctx.privateShrinkwrap,
+    oldShrinkwrap: ctx.currentShrinkwrap,
     newShrinkwrap: newShr,
     prefix: ctx.root,
-    store: ctx.storePath,
-    storeIndex: ctx.storeIndex,
+    storeController: opts.storeController,
     bin: opts.bin,
   })
-  const privateShrinkwrap = makePartialPrivateShrinkwrap
-    ? pruneShrinkwrap(ctx.privateShrinkwrap, pkg)
+  ctx.pendingBuilds = ctx.pendingBuilds.filter(pkgId => !removedPkgIds.has(dp.resolve(newShr.registry, pkgId)))
+  await opts.storeController.close()
+  const currentShrinkwrap = makePartialCurrentShrinkwrap
+    ? pruneShrinkwrap(ctx.currentShrinkwrap, pkg)
     : newShr
-  await saveShrinkwrap(ctx.root, newShr, privateShrinkwrap)
+  await saveShrinkwrap(ctx.root, newShr, currentShrinkwrap)
   await saveModules(path.join(ctx.root, 'node_modules'), {
     packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
     store: ctx.storePath,
-    skipped: Array.from(ctx.skipped).filter(pkgId => removedPkgIds.indexOf(pkgId) === -1),
+    skipped: Array.from(ctx.skipped).filter(pkgId => !removedPkgIds.has(pkgId)),
     layoutVersion: LAYOUT_VERSION,
     independentLeaves: opts.independentLeaves,
+    pendingBuilds: ctx.pendingBuilds,
   })
   await removeOuterLinks(pkgsToUninstall, path.join(ctx.root, 'node_modules'), {
     storePath: ctx.storePath,
@@ -103,7 +108,7 @@ async function removeOuterLinks (
 ) {
   // These packages are not in package.json, they were just linked in not installed
   for (const pkgToUninstall of pkgsToUninstall) {
-    if (!await safeIsInnerLink(modules, pkgToUninstall, opts)) {
+    if (await safeIsInnerLink(modules, pkgToUninstall, opts) !== true) {
       await removeTopDependency({
         name: pkgToUninstall,
         dev: false,

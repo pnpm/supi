@@ -3,13 +3,16 @@ node_js:
   - 4
   - 6
   - 8
-
+  - 9
 sudo: false
 before_install:
-  - npm install -g pnpm
+  - git fetch --unshallow
+  - curl -L https://unpkg.com/@pnpm/self-installer | node
 install:
   - pnpm install
 script:
+  - /bin/bash lint-commits.sh
+  - ./node_modules/.bin/commitlint --from=$TRAVIS_COMMIT
   - npm test
 env:
   global:
@@ -17,3 +20,5 @@ env:
     - GIT_NAME: Travis CI
     - GIT_EMAIL: nobody@nobody.org
     - GITHUB_REPO: pnpm/pnpm
+notifications:
+  email: false

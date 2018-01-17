@@ -1,13 +1,14 @@
 import loadJsonFile = require('load-json-file')
 import writePkg = require('write-pkg')
 import {DependenciesType, dependenciesTypes} from './getSaveType'
-import {Package} from './types'
+import {PackageJson} from '@pnpm/types'
+import {packageJsonLogger} from './loggers'
 
 export default async function (
   pkgJsonPath: string,
   removedPackages: string[],
   saveType?: DependenciesType
-): Promise<Package> {
+): Promise<PackageJson> {
   const packageJson = await loadJsonFile(pkgJsonPath)
 
   if (saveType) {
@@ -29,5 +30,6 @@ export default async function (
   }
 
   await writePkg(pkgJsonPath, packageJson)
+  packageJsonLogger.debug({ updated: packageJson })
   return packageJson
 }

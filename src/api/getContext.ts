@@ -2,15 +2,10 @@ import path = require('path')
 import isCI = require('is-ci')
 import {fromDir as readPkgFromDir} from '../fs/readPkg'
 import writePkg = require('write-pkg')
-import expandTilde, {isHomepath} from '../fs/expandTilde'
+import {StrictSupiOptions} from '../types'
 import {
-  Store,
-  read as readStore,
-} from 'package-store'
-import {StrictPnpmOptions} from '../types'
-import {
-  read as readShrinkwrap,
-  readPrivate as readPrivateShrinkwrap,
+  readWanted as readWantedShrinkwrap,
+  readCurrent as readCurrentShrinkwrap,
   Shrinkwrap,
   create as createShrinkwrap,
 } from 'pnpm-shrinkwrap'
@@ -18,31 +13,38 @@ import {
   read as readModules,
 } from '../fs/modulesController'
 import mkdirp = require('mkdirp-promise')
-import {Package} from '../types'
+import {PackageJson} from '@pnpm/types'
 import normalizePath = require('normalize-path')
 import removeAllExceptOuterLinks = require('remove-all-except-outer-links')
-import logger from 'pnpm-logger'
+import logger from '@pnpm/logger'
 import checkCompatibility from './checkCompatibility'
-
-const STORE_VERSION = '2'
+import {packageJsonLogger} from '../loggers'
 
 export type PnpmContext = {
-  pkg: Package,
-  storeIndex: Store,
+  pkg: PackageJson,
   storePath: string,
   root: string,
-  existsPublicShrinkwrap: boolean,
-  existsPrivateShrinkwrap: boolean,
-  privateShrinkwrap: Shrinkwrap,
-  shrinkwrap: Shrinkwrap,
+  existsWantedShrinkwrap: boolean,
+  existsCurrentShrinkwrap: boolean,
+  currentShrinkwrap: Shrinkwrap,
+  wantedShrinkwrap: Shrinkwrap,
   skipped: Set<string>,
+  pendingBuilds: string[],
 }
 
-export default async function getContext (opts: StrictPnpmOptions, installType?: 'named' | 'general'): Promise<PnpmContext> {
+export default async function getContext (
+  opts: {
+    prefix: string,
+    store: string,
+    independentLeaves: boolean,
+    force: boolean,
+    global: boolean,
+    registry: string,
+  },
+  installType?: 'named' | 'general',
+): Promise<PnpmContext> {
   const root = normalizePath(opts.prefix)
-  const storeBasePath = resolveStoreBasePath(opts.store, root)
-
-  const storePath = path.join(storeBasePath, STORE_VERSION)
+  const storePath = opts.store
 
   const modulesPath = path.join(root, 'node_modules')
   const modules = await readModules(modulesPath)
@@ -74,27 +76,27 @@ export default async function getContext (opts: StrictPnpmOptions, installType?:
   const shrOpts = {ignoreIncompatible: opts.force || isCI}
   const files = await Promise.all([
     (opts.global ? readGlobalPkgJson(opts.prefix) : readPkgFromDir(opts.prefix)),
-    readShrinkwrap(root, shrOpts),
-    readPrivateShrinkwrap(root, shrOpts),
-    readStore(storePath),
+    readWantedShrinkwrap(root, shrOpts),
+    readCurrentShrinkwrap(root, shrOpts),
     mkdirp(storePath),
   ])
   const ctx: PnpmContext = {
     pkg: files[0],
     root,
     storePath,
-    shrinkwrap: files[1] || createShrinkwrap(opts.registry),
-    privateShrinkwrap: files[2] || createShrinkwrap(opts.registry),
-    existsPublicShrinkwrap: !!files[1],
-    existsPrivateShrinkwrap: !!files[2],
-    storeIndex: files[3] || {},
+    wantedShrinkwrap: files[1] || createShrinkwrap(opts.registry),
+    currentShrinkwrap: files[2] || createShrinkwrap(opts.registry),
+    existsWantedShrinkwrap: !!files[1],
+    existsCurrentShrinkwrap: !!files[2],
     skipped: new Set(modules && modules.skipped || []),
+    pendingBuilds: modules && modules.pendingBuilds || [],
   }
+  packageJsonLogger.debug({ initial: ctx.pkg })
 
   return ctx
 }
 
-const DefaultGlobalPkg: Package = {
+const DefaultGlobalPkg: PackageJson = {
   name: 'pnpm-global-pkg',
   version: '1.0.0',
   private: true,
@@ -108,11 +110,4 @@ async function readGlobalPkgJson (globalPkgPath: string) {
     await writePkg(globalPkgPath, DefaultGlobalPkg)
     return DefaultGlobalPkg
   }
-}
-
-function resolveStoreBasePath (storePath: string, pkgRoot: string) {
-  if (isHomepath(storePath)) {
-    return expandTilde(storePath)
-  }
-  return path.resolve(pkgRoot, storePath)
 }

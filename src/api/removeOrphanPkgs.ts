@@ -1,24 +1,25 @@
 import rimraf = require('rimraf-then')
 import path = require('path')
 import * as dp from 'dependency-path'
-import {Shrinkwrap} from 'pnpm-shrinkwrap'
-import {Store, save as saveStore, PackageSpec} from 'package-store'
+import {Shrinkwrap, ResolvedPackages} from 'pnpm-shrinkwrap'
+import {StoreController} from 'package-store'
 import R = require('ramda')
 import removeTopDependency from '../removeTopDependency'
-import logger from 'pnpm-logger'
+import logger from '@pnpm/logger'
 import {dependenciesTypes} from '../getSaveType'
+import {statsLogger} from '../loggers'
 
 export default async function removeOrphanPkgs (
   opts: {
+    dryRun?: boolean,
     oldShrinkwrap: Shrinkwrap,
     newShrinkwrap: Shrinkwrap,
     bin: string,
     prefix: string,
-    store: string,
-    storeIndex: Store,
+    storeController: StoreController,
     pruneStore?: boolean,
   }
-): Promise<string[]> {
+): Promise<Set<string>> {
   const oldPkgs = R.toPairs(R.mergeAll(R.map(depType => opts.oldShrinkwrap[depType], dependenciesTypes)))
   const newPkgs = R.toPairs(R.mergeAll(R.map(depType => opts.newShrinkwrap[depType], dependenciesTypes)))
 
@@ -31,41 +32,51 @@ export default async function removeOrphanPkgs (
       dev: Boolean(opts.oldShrinkwrap.devDependencies && opts.oldShrinkwrap.devDependencies[depName[0]]),
       optional: Boolean(opts.oldShrinkwrap.optionalDependencies && opts.oldShrinkwrap.optionalDependencies[depName[0]]),
     }, {
+      dryRun: opts.dryRun,
       modules: rootModules,
       bin: opts.bin,
     })
   }))
 
-  const oldPkgIds = R.keys(opts.oldShrinkwrap.packages).map(depPath => dp.resolve(opts.oldShrinkwrap.registry, depPath))
-  const newPkgIds = R.keys(opts.newShrinkwrap.packages).map(depPath => dp.resolve(opts.newShrinkwrap.registry, depPath))
+  const oldPkgIds = getPackageIds(opts.oldShrinkwrap.registry, opts.oldShrinkwrap.packages || {})
+  const newPkgIds = getPackageIds(opts.newShrinkwrap.registry, opts.newShrinkwrap.packages || {})
 
   const notDependents = R.difference(oldPkgIds, newPkgIds)
 
-  if (notDependents.length) {
-    logger.info(`Removing ${notDependents.length} orphan packages from node_modules`);
+  statsLogger.debug({removed: notDependents.length})
 
-    await Promise.all(notDependents.map(async notDependent => {
-      if (opts.storeIndex[notDependent]) {
-        opts.storeIndex[notDependent].splice(opts.storeIndex[notDependent].indexOf(opts.prefix), 1)
-        if (opts.pruneStore && !opts.storeIndex[notDependent].length) {
-          delete opts.storeIndex[notDependent]
-          await rimraf(path.join(opts.store, notDependent))
-        }
-      }
-      await rimraf(path.join(rootModules, `.${notDependent}`))
-    }))
+  if (!opts.dryRun) {
+    if (notDependents.length) {
+      await Promise.all(notDependents.map(async notDependent => {
+        await rimraf(path.join(rootModules, `.${notDependent}`))
+      }))
+    }
+
+    const newDependents = R.difference(newPkgIds, oldPkgIds)
+
+    await opts.storeController.updateConnections(opts.prefix, {
+      prune: opts.pruneStore || false,
+      removeDependencies: notDependents,
+      addDependencies: newDependents,
+    })
+
+    await opts.storeController.saveState()
   }
 
-  const newDependents = R.difference(newPkgIds, oldPkgIds)
+  return new Set(notDependents)
+}
 
-  newDependents.forEach(newDependent => {
-    opts.storeIndex[newDependent] = opts.storeIndex[newDependent] || []
-    if (opts.storeIndex[newDependent].indexOf(opts.prefix) === -1) {
-      opts.storeIndex[newDependent].push(opts.prefix)
-    }
-  })
-
-  await saveStore(opts.store, opts.storeIndex)
-
-  return notDependents
+function getPackageIds (
+  registry: string,
+  packages: ResolvedPackages
+): string[] {
+  return R.uniq(
+    R.keys(packages)
+      .map(depPath => {
+        if (packages[depPath].id) {
+          return packages[depPath].id
+        }
+        return dp.resolve(registry, depPath)
+      })
+  ) as string[]
 }

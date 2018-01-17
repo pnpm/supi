@@ -1,8 +1,3 @@
-declare module 'proper-lockfile' {
-  const anything: any;
-  export = anything;
-}
-
 declare module 'camelcase' {
   const anything: any;
   export = anything;
@@ -48,7 +43,7 @@ declare module 'normalize-path' {
   export = anything;
 }
 
-declare module 'npm-package-arg' {
+declare module '@zkochan/npm-package-arg' {
   const anything: any;
   export = anything;
 }
@@ -163,11 +158,6 @@ declare module 'execa' {
   export = anything;
 }
 
-declare module 'module' {
-  const anything: any;
-  export = anything;
-}
-
 declare module 'p-limit' {
   const anything: any;
   export = anything;
@@ -270,6 +260,21 @@ declare module 'rename-overwrite' {
 }
 
 declare module 'encode-registry' {
+  const anything: any;
+  export = anything;
+}
+
+declare module 'npm-lifecycle' {
+  const anything: any;
+  export = anything;
+}
+
+declare module 'validate-npm-package-name' {
+  const anything: any;
+  export = anything;
+}
+
+declare module 'replace-string' {
   const anything: any;
   export = anything;
 }

@@ -1,31 +1,47 @@
+import {
+  Dependencies,
+  PackageJson,
+  PnpmOptions,
+  StrictPnpmOptions,
+  ReadPackageHook,
+} from '@pnpm/types'
+import * as dp from 'dependency-path'
 import path = require('path')
-import RegClient = require('npm-registry-client')
 import logger, {
   streamParser,
-  lifecycleLogger,
+} from '@pnpm/logger'
+import {
   stageLogger,
   summaryLogger,
-} from 'pnpm-logger'
+  packageJsonLogger,
+  rootLogger,
+} from '../loggers'
 import logStatus from '../logging/logInstallStatus'
 import pLimit = require('p-limit')
-import npa = require('npm-package-arg')
 import pFilter = require('p-filter')
 import R = require('ramda')
 import safeIsInnerLink from '../safeIsInnerLink'
 import {fromDir as safeReadPkgFromDir} from '../fs/safeReadPkg'
-import {PnpmOptions, StrictPnpmOptions, Dependencies} from '../types'
+import {
+  WantedDependency,
+  SupiOptions,
+  ReporterFunction,
+} from '../types'
 import getContext, {PnpmContext} from './getContext'
 import installMultiple, {InstalledPackage} from '../install/installMultiple'
 import externalLink from './link'
 import linkPackages from '../link'
 import save from '../save'
 import getSaveType from '../getSaveType'
-import {sync as runScriptSync} from '../runScript'
-import postInstall from '../install/postInstall'
-import extendOptions from './extendOptions'
+import postInstall, {npmRunScript} from '../install/postInstall'
+import extendOptions, {
+  InstallOptions,
+  StrictInstallOptions,
+} from './extendInstallOptions'
 import lock from './lock'
 import {
   write as saveShrinkwrap,
+  writeWantedOnly as saveWantedShrinkwrapOnly,
   Shrinkwrap,
   ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
@@ -36,30 +52,33 @@ import {
 } from '../fs/modulesController'
 import mkdirp = require('mkdirp-promise')
 import createMemoize, {MemoizedFunc} from '../memoize'
-import {Package} from '../types'
 import {DependencyTreeNode} from '../link/resolvePeers'
 import depsToSpecs, {similarDepsToSpecs} from '../depsToSpecs'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
 import {
-  Got,
-  createGot,
-  Store,
-  PackageContentInfo,
-  PackageSpec,
+  StoreController,
+} from 'package-store'
+import depsFromPackage, {getPreferredVersionsFromPackage} from '../depsFromPackage'
+import writePkg = require('write-pkg')
+import parseWantedDependencies from '../parseWantedDependencies'
+import {
+  PackageFilesResponse,
   DirectoryResolution,
   Resolution,
-  PackageMeta,
-} from 'package-store'
-import depsFromPackage from '../depsFromPackage'
-import writePkg = require('write-pkg')
+  RequestPackageFunction,
+} from '@pnpm/package-requester'
+import {
+  nodeIdContainsSequence,
+  createNodeId,
+  ROOT_NODE_ID,
+} from '../nodeIdUtils'
 
 export type InstalledPackages = {
   [name: string]: InstalledPackage
 }
 
 export type TreeNode = {
-  nodeId: string,
-  children: string[], // Node IDs of children
+  children: (() => {[alias: string]: string}) | {[alias: string]: string}, // child nodeId by child alias name
   pkg: InstalledPackage,
   depth: number,
   installable: boolean,
@@ -70,7 +89,9 @@ export type TreeNodeMap = {
 }
 
 export type InstallContext = {
+  dryRun: boolean,
   installs: InstalledPackages,
+  outdatedPkgs: {[pkgId: string]: string},
   localPackages: {
     optional: boolean,
     dev: boolean,
@@ -79,50 +100,52 @@ export type InstallContext = {
     version: string,
     name: string,
     specRaw: string,
+    normalizedPref?: string,
+    alias: string,
   }[],
-  childrenIdsByParentId: {[parentId: string]: string[]},
+  childrenByParentId: {[parentId: string]: {alias: string, pkgId: string}[]},
   nodesToBuild: {
+    alias: string,
     nodeId: string,
     pkg: InstalledPackage,
     depth: number,
     installable: boolean,
   }[],
-  shrinkwrap: Shrinkwrap,
-  privateShrinkwrap: Shrinkwrap,
-  fetchingLocker: {
-    [pkgId: string]: {
-      fetchingFiles: Promise<PackageContentInfo>,
-      fetchingPkg: Promise<Package>,
-      calculatingIntegrity: Promise<void>,
-    },
-  },
+  wantedShrinkwrap: Shrinkwrap,
+  currentShrinkwrap: Shrinkwrap,
+  storeController: StoreController,
   // the IDs of packages that are not installable
   skipped: Set<string>,
   tree: {[nodeId: string]: TreeNode},
-  storeIndex: Store,
   force: boolean,
   prefix: string,
-  storePath: string,
   registry: string,
-  metaCache: Map<string, PackageMeta>,
-  got: Got,
   depth: number,
   engineStrict: boolean,
   nodeVersion: string,
   pnpmVersion: string,
-  offline: boolean,
   rawNpmConfig: Object,
   nodeModules: string,
   verifyStoreInegrity: boolean,
+  preferredVersions: {
+    [packageName: string]: {
+      type: 'version' | 'range' | 'tag',
+      selector: string,
+    },
+  },
 }
 
-export async function install (maybeOpts?: PnpmOptions) {
+export async function install (maybeOpts: InstallOptions) {
   const reporter = maybeOpts && maybeOpts.reporter
   if (reporter) {
     streamParser.on('data', reporter)
   }
 
-  const opts = extendOptions(maybeOpts)
+  const opts = await extendOptions(maybeOpts)
+
+  if (!opts.production && opts.optional) {
+    throw new Error('Optional dependencies cannot be installed without production dependencies')
+  }
 
   if (opts.lock) {
     await lock(opts.prefix, _install, {stale: opts.lockStaleDuration, locks: opts.locks})
@@ -140,19 +163,20 @@ export async function install (maybeOpts?: PnpmOptions) {
 
     if (!ctx.pkg) throw new Error('No package.json found')
 
+    const preferredVersions = getPreferredVersionsFromPackage(ctx.pkg)
     const specs = specsToInstallFromPackage(ctx.pkg, {
       prefix: opts.prefix,
     })
 
-    if (ctx.shrinkwrap.specifiers) {
-      ctx.shrinkwrap.dependencies = ctx.shrinkwrap.dependencies || {}
-      ctx.shrinkwrap.devDependencies = ctx.shrinkwrap.devDependencies || {}
-      ctx.shrinkwrap.optionalDependencies = ctx.shrinkwrap.optionalDependencies || {}
+    if (ctx.wantedShrinkwrap.specifiers) {
+      ctx.wantedShrinkwrap.dependencies = ctx.wantedShrinkwrap.dependencies || {}
+      ctx.wantedShrinkwrap.devDependencies = ctx.wantedShrinkwrap.devDependencies || {}
+      ctx.wantedShrinkwrap.optionalDependencies = ctx.wantedShrinkwrap.optionalDependencies || {}
       for (const spec of specs) {
-        if (ctx.shrinkwrap.specifiers[spec.name] !== spec.rawSpec) {
-          delete ctx.shrinkwrap.dependencies[spec.name]
-          delete ctx.shrinkwrap.devDependencies[spec.name]
-          delete ctx.shrinkwrap.optionalDependencies[spec.name]
+        if (spec.alias && ctx.wantedShrinkwrap.specifiers[spec.alias] !== spec.pref) {
+          delete ctx.wantedShrinkwrap.dependencies[spec.alias]
+          delete ctx.wantedShrinkwrap.devDependencies[spec.alias]
+          delete ctx.wantedShrinkwrap.optionalDependencies[spec.alias]
         }
       }
     }
@@ -163,60 +187,44 @@ export async function install (maybeOpts?: PnpmOptions) {
       logger.warn('`prepublish` scripts are deprecated. Use `prepare` for build steps and `prepublishOnly` for upload-only.')
     }
 
+    const scriptsOpts = {
+      rawNpmConfig: opts.rawNpmConfig,
+      modulesDir: path.join(opts.prefix, 'node_modules'),
+      root: opts.prefix,
+      pkgId: opts.prefix,
+      stdio: 'inherit',
+      unsafePerm: opts.unsafePerm || false,
+    }
+
     if (scripts['preinstall']) {
-      npmRun('preinstall', ctx.root, opts.userAgent)
-
-      // a hack to avoid `npm run install` executing preinstall again
-      if (scripts['install']) {
-        const newScripts = Object.assign({}, scripts)
-        delete newScripts['preinstall']
-        const newPkg = Object.assign({}, ctx.pkg, {scripts: newScripts})
-        await writePkg(path.join(ctx.root, 'package.json'), newPkg)
-      }
+      await npmRunScript('preinstall', ctx.pkg, scriptsOpts)
     }
 
-    if (opts.lock === false) {
-      await run()
-    } else {
-      await lock(ctx.storePath, run, {stale: opts.lockStaleDuration, locks: opts.locks})
-    }
+    await installInContext(installType, specs, [], ctx, preferredVersions, opts)
 
     if (scripts['install']) {
-      npmRun('install', ctx.root, opts.userAgent)
-
-      // a hack to avoid `npm run install` executing preinstall again
-      if (scripts['preinstall']) {
-        const pkg = await safeReadPkgFromDir(ctx.root)
-        if (pkg) {
-          pkg.scripts = scripts
-          await writePkg(path.join(ctx.root, 'package.json'), pkg)
-        }
-      }
-    } else if (scripts['postinstall']) {
-      npmRun('postinstall', ctx.root, opts.userAgent)
+      await npmRunScript('install', ctx.pkg, scriptsOpts)
+    }
+    if (scripts['postinstall']) {
+      await npmRunScript('postinstall', ctx.pkg, scriptsOpts)
     }
     if (scripts['prepublish']) {
-      npmRun('prepublish', ctx.root, opts.userAgent)
+      await npmRunScript('prepublish', ctx.pkg, scriptsOpts)
     }
     if (scripts['prepare']) {
-      npmRun('prepare', ctx.root, opts.userAgent)
-    }
-
-    async function run () {
-      await installInContext(installType, specs, [], ctx, opts)
+      await npmRunScript('prepare', ctx.pkg, scriptsOpts)
     }
   }
 }
 
 function specsToInstallFromPackage(
-  pkg: Package,
+  pkg: PackageJson,
   opts: {
     prefix: string,
   }
-): PackageSpec[] {
+): WantedDependency[] {
   const depsToInstall = depsFromPackage(pkg)
   return depsToSpecs(depsToInstall, {
-    where: opts.prefix,
     optionalDependencies: pkg.optionalDependencies || {},
     devDependencies: pkg.devDependencies || {},
   })
@@ -228,15 +236,17 @@ function specsToInstallFromPackage(
  * @example
  *     install({'lodash': '1.0.0', 'foo': '^2.1.0' }, { silent: true })
  */
-export async function installPkgs (fuzzyDeps: string[] | Dependencies, maybeOpts?: PnpmOptions) {
+export async function installPkgs (
+  fuzzyDeps: string[] | Dependencies,
+  maybeOpts: InstallOptions,
+) {
   const reporter = maybeOpts && maybeOpts.reporter
   if (reporter) {
     streamParser.on('data', reporter)
   }
 
-  maybeOpts = maybeOpts || {}
   if (maybeOpts.update === undefined) maybeOpts.update = true
-  const opts = extendOptions(maybeOpts)
+  const opts = await extendOptions(maybeOpts)
 
   if (opts.lock) {
     await lock(opts.prefix, _installPkgs, {stale: opts.lockStaleDuration, locks: opts.locks})
@@ -251,25 +261,23 @@ export async function installPkgs (fuzzyDeps: string[] | Dependencies, maybeOpts
   async function _installPkgs () {
     const installType = 'named'
     const ctx = await getContext(opts, installType)
-    const existingSpecs = opts.global ? {} : depsFromPackage(ctx.pkg)
+    const currentPrefs = opts.global ? {} : depsFromPackage(ctx.pkg)
     const saveType = getSaveType(opts)
     const optionalDependencies = saveType ? {} : ctx.pkg.optionalDependencies || {}
     const devDependencies = saveType ? {} : ctx.pkg.devDependencies || {}
     let packagesToInstall = Array.isArray(fuzzyDeps)
-      ? argsToSpecs(fuzzyDeps, {
+      ? parseWantedDependencies(fuzzyDeps, {
         defaultTag: opts.tag,
-        where: opts.prefix,
         dev: opts.saveDev,
         optional: opts.saveOptional,
-        existingSpecs,
+        currentPrefs,
         optionalDependencies,
         devDependencies,
       })
       : similarDepsToSpecs(fuzzyDeps, {
-        where: opts.prefix,
         dev: opts.saveDev,
         optional: opts.saveOptional,
-        existingSpecs,
+        currentPrefs,
         optionalDependencies,
         devDependencies,
       })
@@ -278,147 +286,163 @@ export async function installPkgs (fuzzyDeps: string[] | Dependencies, maybeOpts
       throw new Error('At least one package has to be installed')
     }
 
-    if (opts.lock === false) {
-      return run()
-    }
-
-    return lock(ctx.storePath, run, {stale: opts.lockStaleDuration, locks: opts.locks})
-
-    function run () {
-      return installInContext(
-        installType,
-        packagesToInstall,
-        packagesToInstall.map(spec => spec.name),
-        ctx,
-        opts)
-    }
+    const preferredVersions = getPreferredVersionsFromPackage(ctx.pkg)
+    return installInContext(
+      installType,
+      packagesToInstall,
+      packagesToInstall.map(wantedDependency => wantedDependency.raw),
+      ctx,
+      preferredVersions,
+      opts)
   }
-}
-
-function argsToSpecs (
-  args: string[],
-  opts: {
-    defaultTag: string,
-    where: string,
-    dev: boolean,
-    optional: boolean,
-    existingSpecs: Dependencies,
-    optionalDependencies: Dependencies,
-    devDependencies: Dependencies,
-  }
-): PackageSpec[] {
-  return args
-    .map(arg => npa(arg, opts.where))
-    .map(spec => {
-      if (!spec.rawSpec && opts.existingSpecs[spec.name]) {
-        return npa.resolve(spec.name, opts.existingSpecs[spec.name], opts.where)
-      }
-      if (spec.type === 'tag' && !spec.rawSpec) {
-        spec.fetchSpec = opts.defaultTag
-      }
-      return spec
-    })
-    .map(spec => {
-      spec.dev = opts.dev || !!opts.devDependencies[spec.name]
-      spec.optional = opts.optional || !!opts.optionalDependencies[spec.name]
-      return spec
-    })
 }
 
 async function installInContext (
   installType: string,
-  packagesToInstall: PackageSpec[],
-  newPkgs: string[],
+  packagesToInstall: WantedDependency[],
+  newPkgRawSpecs: string[],
   ctx: PnpmContext,
-  opts: StrictPnpmOptions
+  preferredVersions: {
+    [packageName: string]: {
+      type: 'version' | 'range' | 'tag',
+      selector: string,
+    },
+  },
+  opts: StrictInstallOptions,
 ) {
   // Unfortunately, the private shrinkwrap file may differ from the public one.
   // A user might run named installations on a project that has a shrinkwrap.yaml file before running a noop install
-  const makePartialPrivateShrinkwrap = installType === 'named' && (
-    ctx.existsPublicShrinkwrap && !ctx.existsPrivateShrinkwrap ||
+  const makePartialCurrentShrinkwrap = installType === 'named' && (
+    ctx.existsWantedShrinkwrap && !ctx.existsCurrentShrinkwrap ||
     // TODO: this operation is quite expensive. We'll have to find a better solution to do this.
     // maybe in pnpm v2 it won't be needed. See: https://github.com/pnpm/pnpm/issues/841
-    !shrinkwrapsEqual(ctx.privateShrinkwrap, ctx.shrinkwrap)
+    !shrinkwrapsEqual(ctx.currentShrinkwrap, ctx.wantedShrinkwrap)
   )
 
-  const nodeModulesPath = path.join(ctx.root, 'node_modules')
-  const client = new RegClient(adaptConfig(opts))
+  if (opts.shrinkwrapOnly && ctx.existsCurrentShrinkwrap) {
+    logger.warn('`node_modules` is present. Shrinkwrap only installation will make it out-of-date')
+  }
 
-  const parts = R.partition(spec => newPkgs.indexOf(spec.name) === -1, packagesToInstall)
-  const oldSpecs = parts[0]
-  const newSpecs = parts[1]
+  const nodeModulesPath = path.join(ctx.root, 'node_modules')
+
+  // This works from minor version 1, so any number is fine
+  // also, the shrinkwrapMinorVersion is going to be removed from shrinkwrap v4
+  const hasManifestInShrinkwrap = typeof ctx.wantedShrinkwrap.shrinkwrapMinorVersion === 'number'
 
   const installCtx: InstallContext = {
+    dryRun: opts.shrinkwrapOnly,
     installs: {},
+    outdatedPkgs: {},
     localPackages: [],
-    childrenIdsByParentId: {},
+    childrenByParentId: {},
     nodesToBuild: [],
-    shrinkwrap: ctx.shrinkwrap,
-    privateShrinkwrap: ctx.privateShrinkwrap,
-    fetchingLocker: {},
+    wantedShrinkwrap: ctx.wantedShrinkwrap,
+    currentShrinkwrap: ctx.currentShrinkwrap,
     skipped: ctx.skipped,
     tree: {},
-    storeIndex: ctx.storeIndex,
-    storePath: ctx.storePath,
-    registry: ctx.shrinkwrap.registry,
+    registry: ctx.wantedShrinkwrap.registry,
     force: opts.force,
-    depth: opts.update ? opts.depth :
-      (R.equals(ctx.shrinkwrap.packages, ctx.privateShrinkwrap.packages) ? opts.repeatInstallDepth : Infinity),
+    depth: (function () {
+      // This can be remove from shrinkwrap v4
+      if (!hasManifestInShrinkwrap) {
+        // The shrinkwrap file has to be updated to contain
+        // the necessary info from package manifests
+        return Infinity
+      }
+      if (opts.update) {
+        return opts.depth
+      }
+      if (R.equals(ctx.wantedShrinkwrap.packages, ctx.currentShrinkwrap.packages)) {
+        return opts.repeatInstallDepth
+      }
+      return Infinity
+    })(),
     prefix: opts.prefix,
-    offline: opts.offline,
     rawNpmConfig: opts.rawNpmConfig,
     nodeModules: nodeModulesPath,
-    metaCache: opts.metaCache,
     verifyStoreInegrity: opts.verifyStoreIntegrity,
     engineStrict: opts.engineStrict,
     nodeVersion: opts.nodeVersion,
     pnpmVersion: opts.packageManager.name === 'pnpm' ? opts.packageManager.version : '',
-    got: createGot(client, {
-      networkConcurrency: opts.networkConcurrency,
-      rawNpmConfig: opts.rawNpmConfig,
-      alwaysAuth: opts.alwaysAuth,
-      registry: opts.registry,
-    }),
+    storeController: opts.storeController,
+    preferredVersions,
   }
   const installOpts = {
     root: ctx.root,
-    resolvedDependencies: Object.assign({}, ctx.shrinkwrap.devDependencies, ctx.shrinkwrap.dependencies, ctx.shrinkwrap.optionalDependencies),
+    resolvedDependencies: {
+      ...ctx.wantedShrinkwrap.devDependencies,
+      ...ctx.wantedShrinkwrap.dependencies,
+      ...ctx.wantedShrinkwrap.optionalDependencies
+    },
     update: opts.update,
     keypath: [],
-    parentNodeId: ':/:',
+    parentNodeId: ROOT_NODE_ID,
     currentDepth: 0,
+    readPackageHook: opts.hooks.readPackage,
+    hasManifestInShrinkwrap,
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
-    (spec: PackageSpec) => !spec.name || safeIsInnerLink(nodeModulesPath, spec.name, {storePath: ctx.storePath}))
+    async (wantedDependency: WantedDependency) => {
+        if (!wantedDependency.alias) return true
+        const isInnerLink = await safeIsInnerLink(nodeModulesPath, wantedDependency.alias, {
+          storePath: ctx.storePath,
+        })
+        if (isInnerLink === true) return true
+        rootLogger.debug({
+          linked: {
+            name: wantedDependency.alias,
+            from: isInnerLink as string,
+            to: nodeModulesPath,
+            dependencyType: wantedDependency.dev && 'dev' || wantedDependency.optional && 'optional' || 'prod',
+          },
+        })
+        // This info-log might be better to be moved to the reporter
+        logger.info(`${wantedDependency.alias} is linked to ${nodeModulesPath} from ${isInnerLink}`)
+        return false
+    })
   const rootPkgs = await installMultiple(
     installCtx,
     nonLinkedPkgs,
     installOpts
   )
   stageLogger.debug('resolution_done')
-  const rootNodeIds = rootPkgs.map(pkg => pkg.nodeId)
   installCtx.nodesToBuild.forEach(nodeToBuild => {
     installCtx.tree[nodeToBuild.nodeId] = {
-      nodeId: nodeToBuild.nodeId,
       pkg: nodeToBuild.pkg,
-      children: buildTree(installCtx, nodeToBuild.nodeId, nodeToBuild.pkg.id,
-        installCtx.childrenIdsByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable),
+      children: () => buildTree(installCtx, nodeToBuild.nodeId, nodeToBuild.pkg.id,
+        installCtx.childrenByParentId[nodeToBuild.pkg.id], nodeToBuild.depth + 1, nodeToBuild.installable),
       depth: nodeToBuild.depth,
       installable: nodeToBuild.installable,
     }
   })
-  const pkgs: InstalledPackage[] = R.props<TreeNode>(rootNodeIds, installCtx.tree).map(node => node.pkg)
-  const pkgsToSave = (pkgs as {
-    optional: boolean,
-    dev: boolean,
-    resolution: Resolution,
-    id: string,
-    version: string,
-    name: string,
-    specRaw: string,
-  }[]).concat(installCtx.localPackages)
+  const rootNodeIdsByAlias = rootPkgs
+    .reduce((rootNodeIdsByAlias, rootPkg) => {
+      const pkg = installCtx.tree[rootPkg.nodeId].pkg
+      const specRaw = pkg.specRaw
+      const spec = R.find(spec => spec.raw === specRaw, packagesToInstall)
+      rootNodeIdsByAlias[rootPkg.alias] = rootPkg.nodeId
+      return rootNodeIdsByAlias
+    }, {})
+  const pkgsToSave = (
+    rootPkgs
+      .map(rootPkg => ({
+        ...installCtx.tree[rootPkg.nodeId].pkg,
+        alias: rootPkg.alias,
+        normalizedPref: rootPkg.normalizedPref,
+      })) as {
+        alias: string,
+        optional: boolean,
+        dev: boolean,
+        resolution: Resolution,
+        id: string,
+        version: string,
+        name: string,
+        specRaw: string,
+        normalizedPref?: string,
+      }[])
+  .concat(installCtx.localPackages)
 
-  let newPkg: Package | undefined = ctx.pkg
+  let newPkg: PackageJson | undefined = ctx.pkg
   if (installType === 'named') {
     if (!ctx.pkg) {
       throw new Error('Cannot save because no package.json found')
@@ -427,23 +451,27 @@ async function installInContext (
     const saveType = getSaveType(opts)
     newPkg = await save(
       pkgJsonPath,
-      <any>pkgsToSave.map(dep => { // tslint:disable-line
-        const spec = R.find(spec => spec.raw === dep.specRaw, newSpecs)
-        if (!spec) return null
-        return {
-          name: dep.name,
-          saveSpec: getSaveSpec(spec, dep.version, opts.saveExact)
-        }
-      }).filter(Boolean),
+      <any>pkgsToSave // tslint:disable-line
+        .map(dep => {
+          return {
+            name: dep.alias,
+            pref: dep.normalizedPref || getPref(dep.alias, dep.name, dep.version, {
+              saveExact: opts.saveExact,
+              savePrefix: opts.savePrefix,
+            })
+          }
+        }),
       saveType
     )
+  } else {
+    packageJsonLogger.debug({ updated: ctx.pkg })
   }
 
   if (newPkg) {
-    ctx.shrinkwrap.dependencies = ctx.shrinkwrap.dependencies || {}
-    ctx.shrinkwrap.specifiers = ctx.shrinkwrap.specifiers || {}
-    ctx.shrinkwrap.optionalDependencies = ctx.shrinkwrap.optionalDependencies || {}
-    ctx.shrinkwrap.devDependencies = ctx.shrinkwrap.devDependencies || {}
+    ctx.wantedShrinkwrap.dependencies = ctx.wantedShrinkwrap.dependencies || {}
+    ctx.wantedShrinkwrap.specifiers = ctx.wantedShrinkwrap.specifiers || {}
+    ctx.wantedShrinkwrap.optionalDependencies = ctx.wantedShrinkwrap.optionalDependencies || {}
+    ctx.wantedShrinkwrap.devDependencies = ctx.wantedShrinkwrap.devDependencies || {}
 
     const deps = newPkg.dependencies || {}
     const devDeps = newPkg.devDependencies || {}
@@ -452,134 +480,173 @@ async function installInContext (
     const getSpecFromPkg = (depName: string) => deps[depName] || devDeps[depName] || optionalDeps[depName]
 
     for (const dep of pkgsToSave) {
-      const ref = absolutePathToRef(dep.id, dep.name, dep.resolution, ctx.shrinkwrap.registry)
-      if (dep.dev) {
-        ctx.shrinkwrap.devDependencies[dep.name] = ref
-      } else if (dep.optional) {
-        ctx.shrinkwrap.optionalDependencies[dep.name] = ref
+      const ref = absolutePathToRef(dep.id, {
+        alias: dep.alias,
+        realName: dep.name,
+        resolution: dep.resolution,
+        standardRegistry: ctx.wantedShrinkwrap.registry,
+      })
+      const isDev = !!devDeps[dep.alias]
+      const isOptional = !!optionalDeps[dep.alias]
+      if (isDev) {
+        ctx.wantedShrinkwrap.devDependencies[dep.alias] = ref
+      } else if (isOptional) {
+        ctx.wantedShrinkwrap.optionalDependencies[dep.alias] = ref
       } else {
-        ctx.shrinkwrap.dependencies[dep.name] = ref
+        ctx.wantedShrinkwrap.dependencies[dep.alias] = ref
       }
-      if (!dep.dev) {
-        delete ctx.shrinkwrap.devDependencies[dep.name]
+      if (!isDev) {
+        delete ctx.wantedShrinkwrap.devDependencies[dep.alias]
       }
-      if (!dep.optional) {
-        delete ctx.shrinkwrap.optionalDependencies[dep.name]
+      if (!isOptional) {
+        delete ctx.wantedShrinkwrap.optionalDependencies[dep.alias]
       }
-      if (dep.dev || dep.optional) {
-        delete ctx.shrinkwrap.dependencies[dep.name]
+      if (isDev || isOptional) {
+        delete ctx.wantedShrinkwrap.dependencies[dep.alias]
       }
-      ctx.shrinkwrap.specifiers[dep.name] = getSpecFromPkg(dep.name)
+      ctx.wantedShrinkwrap.specifiers[dep.alias] = getSpecFromPkg(dep.alias)
     }
   }
 
-  const result = await linkPackages(pkgs, rootNodeIds, installCtx.tree, {
+  const topParents = ctx.pkg
+    ? await getTopParents(
+        R.difference(
+          R.keys(depsFromPackage(ctx.pkg)),
+          newPkgRawSpecs && pkgsToSave.filter(pkgToSave => newPkgRawSpecs.indexOf(pkgToSave.specRaw) !== -1).map(pkg => pkg.alias) || []
+        ),
+        nodeModulesPath
+      )
+    : []
+
+  const result = await linkPackages(rootNodeIdsByAlias, installCtx.tree, {
+    dryRun: opts.shrinkwrapOnly,
     force: opts.force,
     global: opts.global,
     baseNodeModules: nodeModulesPath,
     bin: opts.bin,
-    topParents: ctx.pkg
-      ? await getTopParents(
-          R.difference(R.keys(depsFromPackage(ctx.pkg)), newPkgs), nodeModulesPath)
-      : [],
-    shrinkwrap: ctx.shrinkwrap,
+    topParents,
+    wantedShrinkwrap: ctx.wantedShrinkwrap,
     production: opts.production,
+    development: opts.development,
     optional: opts.optional,
     root: ctx.root,
-    privateShrinkwrap: ctx.privateShrinkwrap,
-    storePath: ctx.storePath,
+    currentShrinkwrap: ctx.currentShrinkwrap,
     skipped: ctx.skipped,
     pkg: newPkg || ctx.pkg,
     independentLeaves: opts.independentLeaves,
-    storeIndex: ctx.storeIndex,
-    makePartialPrivateShrinkwrap,
+    storeController: opts.storeController,
+    makePartialCurrentShrinkwrap,
+    updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
+    outdatedPkgs: installCtx.outdatedPkgs,
   })
 
-  await Promise.all([
-    saveShrinkwrap(ctx.root, result.shrinkwrap, result.privateShrinkwrap),
-    result.privateShrinkwrap.packages === undefined
-      ? Promise.resolve()
-      : saveModules(path.join(ctx.root, 'node_modules'), {
-        packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
-        store: ctx.storePath,
-        skipped: Array.from(installCtx.skipped),
-        layoutVersion: LAYOUT_VERSION,
-        independentLeaves: opts.independentLeaves,
-      }),
-  ])
+  ctx.pendingBuilds = ctx.pendingBuilds
+    .filter(pkgId => !result.removedPkgIds.has(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)))
 
-  // postinstall hooks
-  if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length)) {
-    const limitChild = pLimit(opts.childConcurrency)
-    const linkedPkgsMapValues = R.values(result.linkedPkgsMap)
-    await Promise.all(
-      R.props<DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
-        .map(pkg => limitChild(async () => {
-          try {
-            await postInstall(pkg.hardlinkedLocation, installLogger(pkg.id), {
-              userAgent: opts.userAgent
-            })
-          } catch (err) {
-            if (installCtx.installs[pkg.id].optional) {
-              logger.warn({
-                message: `Skipping failed optional dependency ${pkg.id}`,
-                err,
-              })
-              return
-            }
-            throw err
-          }
-        })
-      )
-    )
+  if (opts.ignoreScripts) {
+    // we can use concat here because we always only append new packages, which are guaranteed to not be there by definition
+    ctx.pendingBuilds = ctx.pendingBuilds
+      .concat(result.newPkgResolvedIds.map(absolutePath => dp.relative(ctx.wantedShrinkwrap.registry, absolutePath)))
   }
 
-  if (installCtx.localPackages.length) {
-    const linkOpts = Object.assign({}, opts, {skipInstall: true})
-    await Promise.all(installCtx.localPackages.map(async localPackage => {
-      await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
-      logStatus({
-        status: 'installed',
-        pkgId: localPackage.id,
-      })
-    }))
+  if (opts.shrinkwrapOnly) {
+    await saveWantedShrinkwrapOnly(ctx.root, result.wantedShrinkwrap)
+  } else {
+    await Promise.all([
+      saveShrinkwrap(ctx.root, result.wantedShrinkwrap, result.currentShrinkwrap),
+      result.currentShrinkwrap.packages === undefined && result.removedPkgIds.size === 0
+        ? Promise.resolve()
+        : saveModules(path.join(ctx.root, 'node_modules'), {
+          packageManager: `${opts.packageManager.name}@${opts.packageManager.version}`,
+          store: ctx.storePath,
+          skipped: Array.from(installCtx.skipped),
+          layoutVersion: LAYOUT_VERSION,
+          independentLeaves: opts.independentLeaves,
+          pendingBuilds: ctx.pendingBuilds,
+        }),
+    ])
+
+    // postinstall hooks
+    if (!(opts.ignoreScripts || !result.newPkgResolvedIds || !result.newPkgResolvedIds.length)) {
+      const limitChild = pLimit(opts.childConcurrency)
+      await Promise.all(
+        R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
+          .map(pkg => limitChild(async () => {
+            try {
+              await postInstall(pkg.peripheralLocation, {
+                rawNpmConfig: installCtx.rawNpmConfig,
+                initialWD: ctx.root,
+                userAgent: opts.userAgent,
+                pkgId: pkg.id,
+                unsafePerm: opts.unsafePerm || false,
+              })
+            } catch (err) {
+              if (installCtx.installs[pkg.id].optional) {
+                logger.warn({
+                  message: `Skipping failed optional dependency ${pkg.id}`,
+                  err,
+                })
+                return
+              }
+              throw err
+            }
+          })
+        )
+      )
+    }
+
+    if (installCtx.localPackages.length) {
+      const linkOpts = {
+        ...opts,
+        skipInstall: true,
+        linkToBin: opts.bin,
+      }
+      await Promise.all(installCtx.localPackages.map(async localPackage => {
+        await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
+        logStatus({
+          status: 'installed',
+          pkgId: localPackage.id,
+        })
+      }))
+    }
   }
 
   // waiting till the skipped packages are downloaded to the store
   await Promise.all(
-    R.props<InstalledPackage>(Array.from(installCtx.skipped), installCtx.installs)
+    R.props<string, InstalledPackage>(Array.from(installCtx.skipped), installCtx.installs)
       // skipped packages might have not been reanalized on a repeat install
       // so lets just ignore those by excluding nulls
       .filter(Boolean)
       .map(pkg => pkg.fetchingFiles)
   )
 
-  // waiting till integrities are saved
-  await Promise.all(R.values(installCtx.installs).map(installed => installed.calculatingIntegrity))
+  // waiting till package requests are finished
+  await Promise.all(R.values(installCtx.installs).map(installed => installed.finishing))
 
   summaryLogger.info(undefined)
+
+  await opts.storeController.close()
 }
 
 function buildTree (
   ctx: InstallContext,
   parentNodeId: string,
   parentId: string,
-  childrenIds: string[],
+  children: {alias: string, pkgId: string}[],
   depth: number,
   installable: boolean
 ) {
-  const childrenNodeIds = []
-  for (const childId of childrenIds) {
-    if (parentNodeId.indexOf(`:${parentId}:${childId}:`) !== -1) {
+  const childrenNodeIds = {}
+  for (const child of children) {
+    if (nodeIdContainsSequence(parentNodeId, parentId, child.pkgId)) {
       continue
     }
-    const childNodeId = `${parentNodeId}${childId}:`
-    childrenNodeIds.push(childNodeId)
-    installable = installable && !ctx.skipped.has(childId)
+    const childNodeId = createNodeId(parentNodeId, child.pkgId)
+    childrenNodeIds[child.alias] = childNodeId
+    installable = installable && !ctx.skipped.has(child.pkgId)
     ctx.tree[childNodeId] = {
-      nodeId: childNodeId,
-      pkg: ctx.installs[childId],
-      children: buildTree(ctx, childNodeId, childId, ctx.childrenIdsByParentId[childId], depth + 1, installable),
+      pkg: ctx.installs[child.pkgId],
+      children: () => buildTree(ctx, childNodeId, child.pkgId, ctx.childrenByParentId[child.pkgId], depth + 1, installable),
       depth,
       installable,
     }
@@ -591,68 +658,22 @@ async function getTopParents (pkgNames: string[], modules: string) {
   const pkgs = await Promise.all(
     pkgNames.map(pkgName => path.join(modules, pkgName)).map(safeReadPkgFromDir)
   )
-  return pkgs.filter(Boolean).map((pkg: Package) => ({
+  return pkgs.filter(Boolean).map((pkg: PackageJson) => ({
     name: pkg.name,
     version: pkg.version,
   }))
 }
 
-function getSaveSpec(spec: PackageSpec, version: string, saveExact: boolean) {
-  switch (spec.type) {
-    case 'version':
-    case 'range':
-    case 'tag':
-      return `${saveExact ? '' : '^'}${version}`
-    default:
-      return spec.saveSpec
+function getPref (
+  alias: string,
+  name: string,
+  version: string,
+  opts: {
+    saveExact: boolean,
+    savePrefix: string,
   }
-}
-
-function adaptConfig (opts: StrictPnpmOptions) {
-  const registryLog = logger('registry')
-  return {
-    proxy: {
-      http: opts.proxy,
-      https: opts.httpsProxy,
-      localAddress: opts.localAddress
-    },
-    ssl: {
-      certificate: opts.cert,
-      key: opts.key,
-      ca: opts.ca,
-      strict: opts.strictSsl
-    },
-    retry: {
-      count: opts.fetchRetries,
-      factor: opts.fetchRetryFactor,
-      minTimeout: opts.fetchRetryMintimeout,
-      maxTimeout: opts.fetchRetryMaxtimeout
-    },
-    userAgent: opts.userAgent,
-    log: Object.assign({}, registryLog, {
-      verbose: registryLog.debug.bind(null, 'http'),
-      http: registryLog.debug.bind(null, 'http'),
-    }),
-    defaultTag: opts.tag
-  }
-}
-
-function npmRun (scriptName: string, pkgRoot: string, userAgent: string) {
-  const result = runScriptSync('npm', ['run', scriptName], {
-    cwd: pkgRoot,
-    stdio: 'inherit',
-    userAgent,
-  })
-  if (result.status !== 0) {
-    const err = new Error(`Running event ${scriptName} failed with status ${result.status}`)
-    err['code'] = 'ELIFECYCLE'
-    throw err
-  }
-}
-
-function installLogger (pkgId: string) {
-  return (stream: string, line: string) => {
-    const logLevel = stream === 'stderr' ? 'error' : 'info'
-    lifecycleLogger[logLevel]({pkgId, line})
-  }
+) {
+  let prefix = alias !== name ? `npm:${name}@` : ''
+  if (opts.saveExact) return `${prefix}${version}`
+  return `${prefix}${opts.savePrefix}${version}`
 }

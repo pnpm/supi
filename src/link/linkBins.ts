@@ -7,7 +7,7 @@ import getPkgDirs from '../fs/getPkgDirs'
 import binify from '../binify'
 import isWindows = require('is-windows')
 import cmdShim = require('@zkochan/cmd-shim')
-import logger from 'pnpm-logger'
+import logger from '@pnpm/logger'
 import Module = require('module')
 import R = require('ramda')
 
@@ -51,7 +51,7 @@ async function getBinNodePaths (target: string) {
   const targetRealPath = await fs.realpath(target)
 
   return R.union(
-    Module._nodeModulePaths(targetRealPath),
-    Module._nodeModulePaths(target)
+    Module['_nodeModulePaths'](targetRealPath),
+    Module['_nodeModulePaths'](target)
   )
 }
