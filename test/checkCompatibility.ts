@@ -29,7 +29,7 @@ test('does not throw when path is identical', async (t: tape.Test) => {
         layoutVersion: LAYOUT_VERSION
       } as Modules,
       {
-        storePath: 'z:\\foo\bar',
+        storePath: 'z:\\foo\\bar',
         modulesPath: undefined
       }
     );
@@ -44,7 +44,7 @@ test('throws when path is different', async (t: tape.Test) => {
         layoutVersion: LAYOUT_VERSION
       } as Modules,
       {
-        storePath: 'z:\\foo\bar',
+        storePath: 'z:\\foo\\bar',
         modulesPath: undefined
       }
     );
