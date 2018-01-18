@@ -710,7 +710,6 @@ test('ignores drive case in store path', async (t: tape.Test) => {
   if (!isWindows()) return
 
   const project = prepare(t)
-  const opts = await testDefaults()
 
   // paths are case-insensitive on windows, so we will test with an upper and lower-case store
   const storePathUpper: string = path.resolve('node_modules/.store1').toUpperCase();
