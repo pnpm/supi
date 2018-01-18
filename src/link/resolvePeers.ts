@@ -54,7 +54,7 @@ export type DependencyTreeNode = {
     os?: string[],
   },
   sideEffectsCache: Map<string, string>,
-  importedFromCache?: boolean,
+  isBuilt?: boolean,
 }
 
 export type DependencyTreeNodeMap = {
@@ -101,6 +101,11 @@ export default function (
   })
 
   R.values(resolvedTree).forEach(node => {
+    const nodeMajor = process.version.substring(0, process.version.indexOf('.'))
+    if (node.sideEffectsCache && node.sideEffectsCache[nodeMajor]) {
+      node.isBuilt = true
+      node.centralLocation = node.sideEffectsCache[nodeMajor]
+    }
     node.children = R.keys(node.children).reduce((acc, alias) => {
       acc[alias] = absolutePathsByNodeId[node.children[alias]]
       return acc

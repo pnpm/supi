@@ -573,11 +573,9 @@ async function installInContext (
       const limitChild = pLimit(opts.childConcurrency)
       await Promise.all(
         R.props<string, DependencyTreeNode>(result.newPkgResolvedIds, result.linkedPkgsMap)
+          .filter(pkg => !pkg.isBuilt)
           .map(pkg => limitChild(async () => {
             try {
-              if (pkg.importedFromCache) {
-                return
-              }
               const hasSideEffects = await postInstall(pkg.peripheralLocation, {
                 rawNpmConfig: installCtx.rawNpmConfig,
                 initialWD: ctx.root,
@@ -586,7 +584,10 @@ async function installInContext (
                 unsafePerm: opts.unsafePerm || false,
               })
               if (hasSideEffects && opts.sideEffectsCache && !opts.sideEffectsCacheReadonly) {
-                await installCtx.storeController.upload(process.version, pkg)
+                await installCtx.storeController.upload(pkg.peripheralLocation, {
+                  nodeVersion: process.version,
+                  pkgId: pkg.id,
+                })
               }
             } catch (err) {
               if (installCtx.installs[pkg.id].optional) {

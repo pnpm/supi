@@ -276,14 +276,7 @@ async function linkAllPkgs (
       const filesResponse = await pkg.fetchingFiles
 
       if (pkg.independent) return
-
-      let importFrom = pkg.centralLocation
-      const nodeMajor = process.version.substring(0, process.version.indexOf('.'))
-      if (opts.sideEffectsCache && pkg.sideEffectsCache[nodeMajor]) {
-        pkg.importedFromCache = true
-        importFrom = pkg.sideEffectsCache[nodeMajor]
-      }
-      return storeController.importPackage(importFrom, pkg.peripheralLocation, {
+      return storeController.importPackage(pkg.centralLocation, pkg.peripheralLocation, {
         force: opts.force,
         filesResponse,
       })
