@@ -65,10 +65,9 @@ export default function checkCompatibility (
   opts: {
     storePath: string,
     modulesPath: string,
-  },
-  pathTool: typeof path = path
+  }
 ) {
-  if (pathTool.relative(modules.store, opts.storePath) !== '') {
+  if (path.relative(modules.store, opts.storePath) !== '') {
     throw new UnexpectedStoreError({
       expectedStorePath: modules.store,
       actualStorePath: opts.storePath,
