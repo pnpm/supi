@@ -73,6 +73,8 @@ import {
   ROOT_NODE_ID,
 } from '../nodeIdUtils'
 
+const ENGINE_NAME = `${process.platform}-${process.arch}-${process.version.substring(0, process.version.indexOf('.'))}`
+
 export type InstalledPackages = {
   [name: string]: InstalledPackage
 }
@@ -585,7 +587,7 @@ async function installInContext (
               })
               if (hasSideEffects && opts.sideEffectsCache && !opts.sideEffectsCacheReadonly) {
                 await installCtx.storeController.upload(pkg.peripheralLocation, {
-                  nodeVersion: process.version,
+                  engineName: ENGINE_NAME,
                   pkgId: pkg.id,
                 })
               }

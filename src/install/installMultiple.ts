@@ -38,7 +38,7 @@ import {
 import encodePkgId from '../encodePkgId'
 import semver = require('semver')
 
-const NODE_MAJOR = process.version.substring(0, process.version.indexOf('.'))
+const ENGINE_NAME = `${process.platform}-${process.arch}-${process.version.substring(0, process.version.indexOf('.'))}`
 
 export type PkgAddress = {
   alias: string,
@@ -411,7 +411,7 @@ async function install (
         cpu: pkg.cpu,
         os: pkg.os,
       },
-      cacheByNodeVersion: ctx.force || pkgResponse.body.sideEffectsCache[NODE_MAJOR],
+      cacheByNodeVersion: ctx.force || pkgResponse.body.cacheByEngine[ENGINE_NAME],
     }
     const children = await installDependencies(
       pkg,
