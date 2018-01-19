@@ -38,6 +38,8 @@ import {
 import encodePkgId from '../encodePkgId'
 import semver = require('semver')
 
+const NODE_MAJOR = process.version.substring(0, process.version.indexOf('.'))
+
 export type PkgAddress = {
   alias: string,
   nodeId: string,
@@ -72,7 +74,7 @@ export type InstalledPackage = {
     cpu?: string[],
     os?: string[],
   },
-  cacheByNodeVersion: string,
+  cacheByNodeVersion?: string,
 }
 
 export default async function installMultiple (
@@ -385,7 +387,6 @@ async function install (
 
     const peerDependencies = peerDependenciesWithoutOwn(pkg)
 
-    const nodeMajor = process.version.substring(0, process.version.indexOf('.'))
     ctx.installs[pkgResponse.body.id] = {
       id: pkgResponse.body.id,
       resolution: pkgResponse.body.resolution,
@@ -410,7 +411,7 @@ async function install (
         cpu: pkg.cpu,
         os: pkg.os,
       },
-      cacheByNodeVersion: ctx.force ? '' : pkgResponse.body.sideEffectsCache[nodeMajor],
+      cacheByNodeVersion: ctx.force || pkgResponse.body.sideEffectsCache[NODE_MAJOR],
     }
     const children = await installDependencies(
       pkg,
