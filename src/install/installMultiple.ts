@@ -72,7 +72,7 @@ export type InstalledPackage = {
     cpu?: string[],
     os?: string[],
   },
-  sideEffectsCache: Map<string, string>,
+  cacheByNodeVersion: string,
 }
 
 export default async function installMultiple (
@@ -385,6 +385,7 @@ async function install (
 
     const peerDependencies = peerDependenciesWithoutOwn(pkg)
 
+    const nodeMajor = process.version.substring(0, process.version.indexOf('.'))
     ctx.installs[pkgResponse.body.id] = {
       id: pkgResponse.body.id,
       resolution: pkgResponse.body.resolution,
@@ -409,7 +410,7 @@ async function install (
         cpu: pkg.cpu,
         os: pkg.os,
       },
-      sideEffectsCache: pkgResponse.body.sideEffectsCache,
+      cacheByNodeVersion: ctx.force ? '' : pkgResponse.body.sideEffectsCache[nodeMajor],
     }
     const children = await installDependencies(
       pkg,

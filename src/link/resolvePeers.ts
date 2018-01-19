@@ -53,7 +53,6 @@ export type DependencyTreeNode = {
     cpu?: string[],
     os?: string[],
   },
-  sideEffectsCache: Map<string, string>,
   isBuilt?: boolean,
 }
 
@@ -101,11 +100,6 @@ export default function (
   })
 
   R.values(resolvedTree).forEach(node => {
-    const nodeMajor = process.version.substring(0, process.version.indexOf('.'))
-    if (node.sideEffectsCache && node.sideEffectsCache[nodeMajor]) {
-      node.isBuilt = true
-      node.centralLocation = node.sideEffectsCache[nodeMajor]
-    }
     node.children = R.keys(node.children).reduce((acc, alias) => {
       acc[alias] = absolutePathsByNodeId[node.children[alias]]
       return acc
@@ -185,7 +179,8 @@ function resolvePeersOfNode (
       hasBundledDependencies: node.pkg.hasBundledDependencies,
       fetchingFiles: node.pkg.fetchingFiles,
       resolution: node.pkg.resolution,
-      centralLocation,
+      centralLocation: node.pkg.cacheByNodeVersion || centralLocation,
+      isBuilt: !!node.pkg.cacheByNodeVersion,
       modules,
       peripheralLocation,
       independent,
@@ -199,7 +194,6 @@ function resolvePeersOfNode (
       id: node.pkg.id,
       installable: node.installable,
       additionalInfo: node.pkg.additionalInfo,
-      sideEffectsCache: node.pkg.sideEffectsCache,
     }
   }
   return allResolvedPeers
