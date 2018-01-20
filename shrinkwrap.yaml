@@ -42,7 +42,7 @@ dependencies:
   p-filter: 1.0.0
   p-limit: 1.2.0
   p-series: 1.0.0
-  package-store: 0.15.0
+  package-store: 0.15.1
   path-absolute: 1.0.0
   path-exists: 3.0.0
   path-name: 1.0.0
@@ -303,35 +303,6 @@ packages:
       '@pnpm/logger': ^1.0.0
     resolution:
       integrity: sha512-v3Flq4l1/1L+BuazvsxwwcQvd0QqnJjfY81qo69IQognSvhPIz+/ZBUrkvWNYk9e7tyvzvFYfnFkgMKGadIvaw==
-  /@pnpm/package-requester/0.6.4:
-    dependencies:
-      '@pnpm/check-package': 1.0.0
-      '@pnpm/pkgid-to-filename': 1.0.0
-      '@pnpm/types': 1.7.0
-      '@types/load-json-file': 2.0.7
-      '@types/mz': 0.0.32
-      '@types/p-queue': 1.1.0
-      '@types/write-json-file': 2.2.1
-      load-json-file: 4.0.0
-      mkdirp-promise: 5.0.1
-      mz: 2.7.0
-      p-limit: 1.2.0
-      p-queue: 2.3.0
-      path-exists: 3.0.0
-      read-package-json: 2.0.12
-      rename-overwrite: 1.0.0
-      rimraf-then: 1.0.1
-      symlink-dir: 1.1.2
-      unpack-stream: 3.0.1
-      util.promisify: 1.0.0
-      write-json-file: 2.3.0
-    dev: false
-    engines:
-      node: '>=4'
-    peerDependencies:
-      '@pnpm/logger': ^1.0.0
-    resolution:
-      integrity: sha512-AwpcYoxXHyho0q4CV8HwlqtHQeTLphTdKs2cbEIS8ApVTOJkYmO0I5e8wvzLMC9rwBCphJ7xXolu+gJ8itD5Tg==
   /@pnpm/package-requester/0.7.0:
     dependencies:
       '@pnpm/check-package': 1.0.0
@@ -3478,10 +3449,10 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-JFT3uudfk3qtNHpCb3GwOq/n3NrEisxeQC/yTJLk7GHStYleXaFur4yW/SXqOtGMaKAAq5qTrkeFWdXheX+GPA==
-  /package-store/0.15.0:
+  /package-store/0.15.1:
     dependencies:
       '@pnpm/fs-locker': 1.0.1
-      '@pnpm/package-requester': 0.6.4
+      '@pnpm/package-requester': 0.7.0
       '@pnpm/types': 1.7.0
       '@types/load-json-file': 2.0.7
       '@types/mz': 0.0.32
@@ -3509,7 +3480,7 @@ packages:
     peerDependencies:
       '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-bE/Jtkn3/kcWLUPkIejtcAtEkSb4T3GKxToaATZ+tSWGB9BAaTnuKCED6z8cdYazaIP1CUkpFEqddzW33sG1jQ==
+      integrity: sha512-xd1DKf+4PaZcbxCeIoVrzwM9ChebldLc4RJBcwGVAOcEaKUBCB2aUC9VK76IA3Yw4xcx4cOA1QAe2uZC66kVsw==
   /pako/0.2.9:
     dev: false
     resolution:
@@ -5216,7 +5187,7 @@ specifiers:
   p-limit: ^1.1.0
   p-series: ^1.0.0
   package-preview: ^1.0.0
-  package-store: ^0.15.0
+  package-store: ^0.15.1
   path-absolute: ^1.0.0
   path-exists: ^3.0.0
   path-name: ^1.0.0
