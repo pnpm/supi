@@ -1,7 +1,7 @@
 {
   "name": "supi",
   "description": "Fast, disk space efficient installation engine",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "author": {
     "name": "Zoltan Kochan",
     "email": "z@kochan.io",
@@ -44,7 +44,7 @@
     "cross-spawn": "^5.0.0",
     "dependency-path": "^1.2.0",
     "encode-registry": "^1.0.0",
-    "execa": "^0.8.0",
+    "execa": "^0.9.0",
     "get-npm-tarball-url": "^2.0.0",
     "graceful-fs": "^4.1.11",
     "is-ci": "^1.0.10",
