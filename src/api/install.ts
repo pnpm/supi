@@ -589,6 +589,7 @@ async function installInContext (
                 await installCtx.storeController.upload(pkg.peripheralLocation, {
                   engineName: ENGINE_NAME,
                   pkgId: pkg.id,
+                  verifyStoreIntegrity: opts.verifyStoreIntegrity,
                 })
               }
             } catch (err) {
