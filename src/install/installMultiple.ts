@@ -411,7 +411,7 @@ async function install (
         cpu: pkg.cpu,
         os: pkg.os,
       },
-      engineCache: ctx.force || pkgResponse.body.cacheByEngine && pkgResponse.body.cacheByEngine[ENGINE_NAME],
+      engineCache: !ctx.force && pkgResponse.body.cacheByEngine && pkgResponse.body.cacheByEngine[ENGINE_NAME],
     }
     const children = await installDependencies(
       pkg,
