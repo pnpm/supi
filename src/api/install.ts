@@ -587,9 +587,8 @@ async function installInContext (
               })
               if (hasSideEffects && opts.sideEffectsCache && !opts.sideEffectsCacheReadonly) {
                 await installCtx.storeController.upload(pkg.peripheralLocation, {
-                  engineName: ENGINE_NAME,
+                  engine: ENGINE_NAME,
                   pkgId: pkg.id,
-                  verifyStoreIntegrity: opts.verifyStoreIntegrity,
                 })
               }
             } catch (err) {

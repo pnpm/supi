@@ -1,7 +1,7 @@
 dependencies:
   '@pnpm/check-package': 1.0.0
   '@pnpm/fs-locker': 1.0.0
-  '@pnpm/package-requester': 0.6.3
+  '@pnpm/package-requester': 0.6.4
   '@pnpm/pkgid-to-filename': 1.0.0
   '@pnpm/types': 1.7.0
   '@types/byline': 4.2.31
@@ -42,7 +42,7 @@ dependencies:
   p-filter: 1.0.0
   p-limit: 1.2.0
   p-series: 1.0.0
-  package-store: 0.14.0
+  package-store: 0.14.1
   path-absolute: 1.0.0
   path-exists: 3.0.0
   path-name: 1.0.0
@@ -303,7 +303,7 @@ packages:
       '@pnpm/logger': ^1.0.0
     resolution:
       integrity: sha512-v3Flq4l1/1L+BuazvsxwwcQvd0QqnJjfY81qo69IQognSvhPIz+/ZBUrkvWNYk9e7tyvzvFYfnFkgMKGadIvaw==
-  /@pnpm/package-requester/0.6.3:
+  /@pnpm/package-requester/0.6.4:
     dependencies:
       '@pnpm/check-package': 1.0.0
       '@pnpm/pkgid-to-filename': 1.0.0
@@ -331,7 +331,7 @@ packages:
     peerDependencies:
       '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-HajmDYa0XnRS6EJ46wePxS3QTBLvKFVq8w3vO+p/b6WsOGBTU/d1b68AtgOB6AnyReaT4R72mq79EFJmQfMdHw==
+      integrity: sha512-AwpcYoxXHyho0q4CV8HwlqtHQeTLphTdKs2cbEIS8ApVTOJkYmO0I5e8wvzLMC9rwBCphJ7xXolu+gJ8itD5Tg==
   /@pnpm/pkgid-to-filename/1.0.0:
     dependencies:
       normalize-path: 2.1.1
@@ -906,7 +906,7 @@ packages:
     dependencies:
       is-bzip2: 1.0.0
       peek-stream: 1.1.2
-      pumpify: 1.3.6
+      pumpify: 1.4.0
       through2: 2.0.3
       unbzip2-stream: 1.2.5
     dev: false
@@ -1340,7 +1340,7 @@ packages:
     dependencies:
       bzip2-maybe: 1.0.0
       gunzip-maybe: 1.4.1
-      pumpify: 1.3.6
+      pumpify: 1.4.0
     dev: false
     resolution:
       integrity: sha1-rf54xmzAaeZOgkvRQFuF515tHLs=
@@ -1447,7 +1447,7 @@ packages:
       mz: 2.7.0
       p-every: 1.0.2
       p-limit: 1.2.0
-      ssri: 5.0.0
+      ssri: 5.1.0
     dev: false
     engines:
       node: '>=4'
@@ -2041,7 +2041,7 @@ packages:
       is-deflate: 1.0.0
       is-gzip: 1.0.0
       peek-stream: 1.1.2
-      pumpify: 1.3.6
+      pumpify: 1.4.0
       through2: 2.0.3
     dev: false
     resolution:
@@ -3119,7 +3119,7 @@ packages:
     dependencies:
       hosted-git-info: 2.5.0
       is-builtin-module: 1.0.0
-      semver: 5.4.1
+      semver: 5.5.0
       validate-npm-package-license: 3.0.1
     dev: false
     resolution:
@@ -3445,10 +3445,10 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-JFT3uudfk3qtNHpCb3GwOq/n3NrEisxeQC/yTJLk7GHStYleXaFur4yW/SXqOtGMaKAAq5qTrkeFWdXheX+GPA==
-  /package-store/0.14.0:
+  /package-store/0.14.1:
     dependencies:
       '@pnpm/fs-locker': 1.0.0
-      '@pnpm/package-requester': 0.6.3
+      '@pnpm/package-requester': 0.6.4
       '@pnpm/types': 1.7.0
       '@types/load-json-file': 2.0.7
       '@types/mz': 0.0.32
@@ -3466,6 +3466,7 @@ packages:
       path-absolute: 1.0.0
       path-exists: 3.0.0
       ramda: 0.25.0
+      rename-overwrite: 1.0.0
       rimraf-then: 1.0.1
       util.promisify: 1.0.0
       write-json-file: 2.3.0
@@ -3475,7 +3476,7 @@ packages:
     peerDependencies:
       '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-UAdTQDuoDtjidwwBK+6e0iUnwZ+OOvoHKfkzgu+tQwqQNTonSkx3351ppI4WMLmSCxzb2iqnyO59W2qbLB6qZA==
+      integrity: sha512-gMwKm8stgvJogqPzNenzRWnLLbKst6qaVnk5EjQwL7RildtsajyEsgESrduA7XWkoq2XJ/jzzdpys8/Y4KbFYw==
   /pako/0.2.9:
     dev: false
     resolution:
@@ -3796,9 +3797,17 @@ packages:
       duplexify: 3.5.3
       inherits: 2.0.3
       pump: 2.0.0
-    dev: false
+    dev: true
     resolution:
       integrity: sha512-BurGAcvezsINL5US9T9wGHHcLNrG6MCp//ECtxron3vcR+Rfx5Anqq7HbZXNJvFQli8FGVsWCAvywEJFV5Hx/Q==
+  /pumpify/1.4.0:
+    dependencies:
+      duplexify: 3.5.3
+      inherits: 2.0.3
+      pump: 2.0.0
+    dev: false
+    resolution:
+      integrity: sha512-2kmNR9ry+Pf45opRVirpNuIFotsxUGLaYqxIwuR77AYrYRMuFCz9eryHBS52L360O+NcR383CL4QYlMKPq4zYA==
   /punycode/1.4.1:
     resolution:
       integrity: sha1-wNWmOycYgArY4esPpSachN1BhF4=
@@ -4172,6 +4181,10 @@ packages:
     dev: false
     resolution:
       integrity: sha512-WfG/X9+oATh81XtllIo/I8gOiY9EXRdv1cQdyykeXK17YcUW3EXUAi2To4pcH6nZtJPr7ZOpM5OMyWJZm+8Rsg==
+  /semver/5.5.0:
+    dev: false
+    resolution:
+      integrity: sha512-4SJ3dm0WAwWy/NVeioZh5AntkdJoWKxHxcmyP622fOkgHa4z3R0TdBJICINyaSDE6uNwVc8gZr+ZinwZAH4xIA==
   /send/0.15.3:
     dependencies:
       debug: 2.6.7
@@ -4394,6 +4407,12 @@ packages:
     dev: false
     resolution:
       integrity: sha512-728D4yoQcQm1ooZvSbywLkV1RjfITZXh0oWrhM/lnsx3nAHx7LsRGJWB/YyvoceAYRq98xqbstiN4JBv1/wNHg==
+  /ssri/5.1.0:
+    dependencies:
+      safe-buffer: 5.1.1
+    dev: false
+    resolution:
+      integrity: sha512-TevC8fgxQKTfQ1nWtM9GNzr3q5rrHNntG9CDMH1k3QhSZI6Kb+NbjLRs8oPFZa2Hgo7zoekL+UTvoEk7tsbjQg==
   /statuses/1.3.1:
     dev: true
     engines:
@@ -5121,7 +5140,7 @@ specifiers:
   '@pnpm/default-resolver': ^0.1.1
   '@pnpm/fs-locker': ^1.0.0
   '@pnpm/logger': ^1.0.0
-  '@pnpm/package-requester': ^0.6.0
+  '@pnpm/package-requester': ^0.6.4
   '@pnpm/pkgid-to-filename': ^1.0.0
   '@pnpm/types': ^1.7.0
   '@types/byline': ^4.2.31
@@ -5176,7 +5195,7 @@ specifiers:
   p-limit: ^1.1.0
   p-series: ^1.0.0
   package-preview: ^1.0.0
-  package-store: ^0.14.0
+  package-store: ^0.14.1
   path-absolute: ^1.0.0
   path-exists: ^3.0.0
   path-name: ^1.0.0
