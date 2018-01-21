@@ -167,5 +167,10 @@ export default async (
     extendedOpts.prefix = path.join(extendedOpts.prefix, subfolder)
   }
   extendedOpts.rawNpmConfig['registry'] = extendedOpts.registry
+  // if sideEffectsCacheReadonly is true, sideEffectsCache is necessarily true too
+  if (extendedOpts.sideEffectsCache && extendedOpts.sideEffectsCacheReadonly) {
+    logger.warn("--side-effects-cache-readonly turns on side effects cache too, you don't need to specify both")
+  }
+  extendedOpts.sideEffectsCache = extendedOpts.sideEffectsCache || extendedOpts.sideEffectsCacheReadonly
   return extendedOpts
 }
