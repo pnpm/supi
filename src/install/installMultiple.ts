@@ -38,7 +38,7 @@ import {
 import encodePkgId from '../encodePkgId'
 import semver = require('semver')
 
-const ENGINE_NAME = `${process.platform}-${process.arch}-${process.version.substring(0, process.version.indexOf('.'))}`
+const ENGINE_NAME = `${process.platform}-${process.arch}-node-${process.version.split('.')[0]}`
 
 export type PkgAddress = {
   alias: string,
