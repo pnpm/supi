@@ -27,7 +27,7 @@ test('should remove flattened dependencies', async function (t) {
   t.ok(project.hasNot('garbage'), 'garbage dependency removed correctly')
 })
 
-test.only('should not override root packages with flattened dependencies', async function (t) {
+test('should not override root packages with flattened dependencies', async function (t) {
   const project = prepare(t)
 
   // this installs debug@3.1.0
