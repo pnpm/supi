@@ -1,6 +1,6 @@
-import rimraf = require('rimraf-then')
 import path = require('path')
 import * as dp from 'dependency-path'
+import R = require('ramda')
 import getContext, {PnpmContext} from './getContext'
 import getSaveType from '../getSaveType'
 import removeDeps from '../removeDeps'
@@ -25,7 +25,7 @@ import removeOrphanPkgs from './removeOrphanPkgs'
 import safeIsInnerLink from '../safeIsInnerLink'
 import removeTopDependency from '../removeTopDependency'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
-import { SupiOptions, StrictSupiOptions } from '../types';
+import {installPkgs} from './install';
 
 export default async function uninstall (
   pkgsToUninstall: string[],
@@ -100,6 +100,13 @@ export async function uninstallInContext (
     storePath: ctx.storePath,
     bin: opts.bin,
   })
+
+  if (opts.shamefullyFlatten) {
+    const deps = R.keys(ctx.currentShrinkwrap.specifiers).map(
+      pkgName => `${pkgName}@${ctx.currentShrinkwrap.specifiers[pkgName]}`
+    )
+    await installPkgs(deps, Object.assign({}, opts, {lock: false, internalSkipLock: true}))
+  }
 
   logger('summary').info()
 }

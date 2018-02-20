@@ -48,6 +48,7 @@ export type InstallOptions = {
   unsafePerm?: boolean,
   registry?: string,
   lock?: boolean,
+  internalSkipLock?: boolean,
   lockStaleDuration?: number,
   tag?: string,
   locks?: string,
@@ -161,7 +162,7 @@ export default async (
   if (extendedOpts.force) {
     logger.warn('using --force I sure hope you know what you are doing')
   }
-  if (extendedOpts.lock === false) {
+  if (extendedOpts.lock === false && !extendedOpts.internalSkipLock) {
     logger.warn('using --no-lock I sure hope you know what you are doing')
   }
   if (!extendedOpts.shrinkwrap && extendedOpts.shrinkwrapOnly) {
