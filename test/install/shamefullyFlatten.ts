@@ -26,3 +26,14 @@ test('should remove flattened dependencies', async function (t) {
   t.ok(project.hasNot('tap'), 'tap dependency removed correctly')
   t.ok(project.hasNot('garbage'), 'garbage dependency removed correctly')
 })
+
+test.only('should not override root packages with flattened dependencies', async function (t) {
+  const project = prepare(t)
+
+  // this installs debug@3.1.0
+  await installPkgs(['debug@3.1.0'], await testDefaults({shamefullyFlatten: true}))
+  // this installs express@4.16.2, that depends on debug 2.6.9, but we don't want to flatten debug@2.6.9
+  await installPkgs(['express@4.16.2'], await testDefaults({shamefullyFlatten: true}))
+
+  t.equal(project.requireModule('debug/package.json').version, '3.1.0', 'debug did not get overridden by flattening')
+})

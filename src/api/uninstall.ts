@@ -8,10 +8,8 @@ import extendOptions, {
   UninstallOptions,
   StrictUninstallOptions,
 } from './extendUninstallOptions'
-import {PnpmOptions, StrictPnpmOptions} from '@pnpm/types'
 import lock from './lock'
 import {
-  Shrinkwrap,
   write as saveShrinkwrap,
   writeCurrentOnly as saveCurrentShrinkwrapOnly,
   prune as pruneShrinkwrap,
@@ -25,7 +23,7 @@ import removeOrphanPkgs from './removeOrphanPkgs'
 import safeIsInnerLink from '../safeIsInnerLink'
 import removeTopDependency from '../removeTopDependency'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
-import {installPkgs} from './install';
+import {installPkgs} from './install'
 
 export default async function uninstall (
   pkgsToUninstall: string[],
@@ -95,6 +93,7 @@ export async function uninstallInContext (
     layoutVersion: LAYOUT_VERSION,
     independentLeaves: opts.independentLeaves,
     pendingBuilds: ctx.pendingBuilds,
+    shamefullyFlatten: opts.shamefullyFlatten,
   })
   await removeOuterLinks(pkgsToUninstall, path.join(ctx.root, 'node_modules'), {
     storePath: ctx.storePath,
@@ -106,7 +105,7 @@ export async function uninstallInContext (
       pkgName => `${pkgName}@${currentShrinkwrap.specifiers[pkgName]}`
     )
     if (deps.length > 0) {
-      await installPkgs(deps, Object.assign({}, opts, {lock: false, internalSkipLock: true}))
+      await installPkgs(deps, Object.assign({}, opts, {lock: false, lockProjectDirectory: true}))
     }
   }
 

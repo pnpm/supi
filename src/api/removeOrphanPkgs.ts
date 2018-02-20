@@ -7,7 +7,6 @@ import exists = require('path-exists')
 import R = require('ramda')
 import resolveLinkTarget = require('resolve-link-target')
 import removeTopDependency from '../removeTopDependency'
-import logger from '@pnpm/logger'
 import {dependenciesTypes} from '../getSaveType'
 import {statsLogger} from '../loggers'
 import getPkgInfoFromShr from '../getPkgInfoFromShr'
@@ -51,9 +50,11 @@ export default async function removeOrphanPkgs (
 
   if (!opts.dryRun) {
     if (notDependents.length) {
-      await Promise.all(notDependents.map(async notDependent => {
-        if (opts.shamefullyFlatten && opts.oldShrinkwrap.packages) {
-          const pkgShr = opts.oldShrinkwrap.packages[dp.relative(opts.oldShrinkwrap.registry, notDependent)]
+
+      if (opts.shamefullyFlatten && opts.oldShrinkwrap.packages) {
+        const packages = opts.oldShrinkwrap.packages
+        await Promise.all(notDependents.map(async notDependent => {
+          const pkgShr = packages[dp.relative(opts.oldShrinkwrap.registry, notDependent)]
           const pkgInfo = getPkgInfoFromShr(notDependent, pkgShr)
           const rootLink = path.join(rootModules, pkgInfo.name)
           // rootLink might not exist anymore because it might have been delete earlier
@@ -71,7 +72,10 @@ export default async function removeOrphanPkgs (
               })
             }
           }
-        }
+        }))
+      }
+
+      await Promise.all(notDependents.map(async notDependent => {
         await rimraf(path.join(rootModules, `.${notDependent}`))
       }))
     }

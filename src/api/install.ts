@@ -572,6 +572,7 @@ async function installInContext (
           layoutVersion: LAYOUT_VERSION,
           independentLeaves: opts.independentLeaves,
           pendingBuilds: ctx.pendingBuilds,
+          shamefullyFlatten: opts.shamefullyFlatten,
         }),
     ])
 
