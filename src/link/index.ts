@@ -48,6 +48,7 @@ export default async function linkPackages (
     updateShrinkwrapMinorVersion: boolean,
     outdatedPkgs: {[pkgId: string]: string},
     sideEffectsCache: boolean,
+    shamefullyFlatten: boolean,
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -69,6 +70,7 @@ export default async function linkPackages (
     oldShrinkwrap: opts.currentShrinkwrap,
     newShrinkwrap: newShr,
     prefix: opts.root,
+    shamefullyFlatten: opts.shamefullyFlatten,
     storeController: opts.storeController,
     bin: opts.bin,
   })
@@ -127,6 +129,46 @@ export default async function linkPackages (
       status: 'installed',
       pkgId: pkg.id,
     })
+  }
+  if (opts.shamefullyFlatten) {
+    const compatiblePkgsToLinkByName = flatResolvedDeps
+      .filter(pkg => pkg.depth === 0)
+      .reduce((rootPkgsToLink, pkg) => {
+        rootPkgsToLink[pkg.name] = pkg
+        return rootPkgsToLink
+      }, {})
+    const compatiblePackagesToLinkByAbsolutePath = flatResolvedDeps
+      .filter(pkg => {
+        const shouldAdd = !compatiblePkgsToLinkByName[pkg.name]
+        if (shouldAdd) {
+          compatiblePkgsToLinkByName[pkg.name] = pkg
+        }
+        return shouldAdd
+      })
+      .reduce((compatiblePkgsToLink, pkg) => {
+        compatiblePkgsToLink[pkg.absolutePath] = pkg
+        return compatiblePkgsToLink
+      }, {})
+    for (let pkg of R.values(compatiblePackagesToLinkByAbsolutePath)) {
+      if (opts.dryRun || !(await symlinkDependencyTo(pkg.name, pkg, opts.baseNodeModules)).reused) {
+        const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
+        const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
+        rootLogger.info({
+          added: {
+            id: pkg.id,
+            name: pkg.name,
+            realName: pkg.name,
+            version: pkg.version,
+            latest: opts.outdatedPkgs[pkg.id],
+            dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
+          },
+        })
+      }
+      logStatus({
+        status: 'installed',
+        pkgId: pkg.id,
+      })
+    }
   }
   if (!opts.dryRun) {
     await linkBins(opts.baseNodeModules, opts.bin)

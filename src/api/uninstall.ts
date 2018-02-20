@@ -74,6 +74,7 @@ export async function uninstallInContext (
     oldShrinkwrap: ctx.currentShrinkwrap,
     newShrinkwrap: newShr,
     prefix: ctx.root,
+    shamefullyFlatten: opts.shamefullyFlatten,
     storeController: opts.storeController,
     bin: opts.bin,
   })

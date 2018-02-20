@@ -544,6 +544,7 @@ async function installInContext (
     updateShrinkwrapMinorVersion: installType === 'general' || R.isEmpty(ctx.currentShrinkwrap.packages),
     outdatedPkgs: installCtx.outdatedPkgs,
     sideEffectsCache: opts.sideEffectsCache,
+    shamefullyFlatten: opts.shamefullyFlatten,
   })
 
   ctx.pendingBuilds = ctx.pendingBuilds

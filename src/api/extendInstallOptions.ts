@@ -33,6 +33,7 @@ export type InstallOptions = {
   savePrefix?: string,
   saveDev?: boolean,
   saveOptional?: boolean,
+  shamefullyFlatten?: boolean,
   sideEffectsCache?: boolean,
   sideEffectsCacheReadonly?: boolean,
   global?: boolean,
@@ -75,6 +76,7 @@ export type StrictInstallOptions = InstallOptions & {
   savePrefix: string,
   saveDev: boolean,
   saveOptional: boolean,
+  shamefullyFlatten: boolean,
   sideEffectsCache: boolean,
   sideEffectsCacheReadonly: boolean,
   global: boolean,
@@ -131,6 +133,7 @@ const defaults = async (opts: InstallOptions) => {
     verifyStoreIntegrity: true,
     hooks: {},
     savePrefix: '^',
+    shamefullyFlatten: false,
     sideEffectsCache: false,
     sideEffectsCacheReadonly: false,
     unsafePerm: process.platform === 'win32' ||
