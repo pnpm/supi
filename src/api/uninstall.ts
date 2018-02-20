@@ -102,10 +102,12 @@ export async function uninstallInContext (
   })
 
   if (opts.shamefullyFlatten) {
-    const deps = R.keys(ctx.currentShrinkwrap.specifiers).map(
-      pkgName => `${pkgName}@${ctx.currentShrinkwrap.specifiers[pkgName]}`
+    const deps = R.keys(currentShrinkwrap.specifiers).map(
+      pkgName => `${pkgName}@${currentShrinkwrap.specifiers[pkgName]}`
     )
-    await installPkgs(deps, Object.assign({}, opts, {lock: false, internalSkipLock: true}))
+    if (deps.length > 0) {
+      await installPkgs(deps, Object.assign({}, opts, {lock: false, internalSkipLock: true}))
+    }
   }
 
   logger('summary').info()
