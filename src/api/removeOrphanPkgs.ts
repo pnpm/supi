@@ -59,9 +59,10 @@ export default async function removeOrphanPkgs (
           const rootLink = path.join(rootModules, pkgInfo.name)
           // rootLink might not exist anymore because it might have been delete earlier
           if (await exists(rootLink)) {
-            const linkTarget = path.relative(rootModules, await resolveLinkTarget(rootLink))
+            const linkTarget = await resolveLinkTarget(rootLink)
+            const notDependentDir = path.join(rootModules, `.${notDependent}`)
             // we only want to remove the root link if it points to a version that we are removing
-            if (linkTarget.startsWith(`.${notDependent}`)) {
+            if (linkTarget.startsWith(notDependentDir)) {
               await removeTopDependency({
                 name: pkgInfo.name,
                 dev: false,
