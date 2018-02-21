@@ -7,14 +7,14 @@ import {prepare, testDefaults} from '../utils'
 const test = promisifyTape(tape)
 test.only = promisifyTape(tape.only)
 
-test('should flatten dependencies', async function (t) {
+test.only('should flatten dependencies', async function (t) {
   const project = prepare(t)
 
   await installPkgs(['express'], await testDefaults({shamefullyFlatten: true}))
 
-  t.ok(project.has('express'), 'express installed correctly')
-  t.ok(project.has('debug'), 'debug dependency flattened')
-  t.ok(project.has('cookie'), 'cookie dependency flattened')
+  await project.has('express')
+  await project.has('debug')
+  await project.has('cookie')
 })
 
 test('should remove flattened dependencies', async function (t) {
@@ -23,9 +23,9 @@ test('should remove flattened dependencies', async function (t) {
   await installPkgs(['express'], await testDefaults({shamefullyFlatten: true}))
   await uninstall(['express'], await testDefaults({shamefullyFlatten: true}))
 
-  t.ok(project.hasNot('express'), 'express removed correctly')
-  t.ok(project.hasNot('debug'), 'debug dependency removed correctly')
-  t.ok(project.hasNot('cookie'), 'cookie dependency removed correctly')
+  await project.hasNot('express')
+  await project.hasNot('debug')
+  await project.hasNot('cookie')
 })
 
 test('should not override root packages with flattened dependencies', async function (t) {
