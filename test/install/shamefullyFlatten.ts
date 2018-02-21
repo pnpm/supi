@@ -5,9 +5,8 @@ import {install, installPkgs, uninstall} from 'supi'
 import {prepare, testDefaults} from '../utils'
 
 const test = promisifyTape(tape)
-test.only = promisifyTape(tape.only)
 
-test.only('should flatten dependencies', async function (t) {
+test('should flatten dependencies', async function (t) {
   const project = prepare(t)
 
   await installPkgs(['express'], await testDefaults({shamefullyFlatten: true}))
