@@ -100,13 +100,10 @@ export async function uninstallInContext (
     bin: opts.bin,
   })
 
-  if (opts.shamefullyFlatten) {
-    const deps = R.keys(currentShrinkwrap.specifiers).map(
-      pkgName => `${pkgName}@${currentShrinkwrap.specifiers[pkgName]}`
-    )
-    if (deps.length > 0) {
-      await installPkgs(deps, Object.assign({}, opts, {lock: false, lockProjectDirectory: true}))
-    }
+  if (opts.shamefullyFlatten && R.keys(currentShrinkwrap.specifiers).length > 0) {
+    await installPkgs(currentShrinkwrap.specifiers, Object.assign({},
+      opts, {lock: false, reinstallForFlatten: true, update: false}
+    ))
   }
 
   logger('summary').info()

@@ -204,6 +204,12 @@ export async function install (maybeOpts: InstallOptions) {
 
     await installInContext(installType, specs, [], ctx, preferredVersions, opts)
 
+    if (opts.shamefullyFlatten && specs.length > 0) {
+      await installPkgs(specs.map(spec => spec.raw), Object.assign({},
+        opts, {lock: false, reinstallForFlatten: true, update: false}
+      ))
+    }
+
     if (scripts['install']) {
       await npmRunScript('install', ctx.pkg, scriptsOpts)
     }
@@ -384,6 +390,7 @@ async function installInContext (
     readPackageHook: opts.hooks.readPackage,
     hasManifestInShrinkwrap,
     sideEffectsCache: opts.sideEffectsCache,
+    reinstallForFlatten: opts.reinstallForFlatten,
   }
   const nonLinkedPkgs = await pFilter(packagesToInstall,
     async (wantedDependency: WantedDependency) => {
@@ -448,7 +455,7 @@ async function installInContext (
   .concat(installCtx.localPackages)
 
   let newPkg: PackageJson | undefined = ctx.pkg
-  if (installType === 'named') {
+  if (installType === 'named' && !opts.reinstallForFlatten) {
     if (!ctx.pkg) {
       throw new Error('Cannot save because no package.json found')
     }
