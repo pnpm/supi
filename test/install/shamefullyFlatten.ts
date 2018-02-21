@@ -10,22 +10,22 @@ test.only = promisifyTape(tape.only)
 test('should flatten dependencies', async function (t) {
   const project = prepare(t)
 
-  await installPkgs(['jsonify'], await testDefaults({shamefullyFlatten: true}))
+  await installPkgs(['express'], await testDefaults({shamefullyFlatten: true}))
 
-  t.ok(project.has('jsonify'), 'jsonify installed correctly')
-  t.ok(project.has('tap'), 'tap dependency flattened')
-  t.ok(project.has('garbage'), 'garbage dependency flattened')
+  t.ok(project.has('express'), 'express installed correctly')
+  t.ok(project.has('debug'), 'debug dependency flattened')
+  t.ok(project.has('cookie'), 'cookie dependency flattened')
 })
 
 test('should remove flattened dependencies', async function (t) {
   const project = prepare(t)
 
-  await installPkgs(['jsonify'], await testDefaults({shamefullyFlatten: true}))
-  await uninstall(['jsonify'], await testDefaults({shamefullyFlatten: true}))
+  await installPkgs(['express'], await testDefaults({shamefullyFlatten: true}))
+  await uninstall(['express'], await testDefaults({shamefullyFlatten: true}))
 
-  t.ok(project.hasNot('jsonify'), 'jsonify removed correctly')
-  t.ok(project.hasNot('tap'), 'tap dependency removed correctly')
-  t.ok(project.hasNot('garbage'), 'garbage dependency removed correctly')
+  t.ok(project.hasNot('express'), 'express removed correctly')
+  t.ok(project.hasNot('debug'), 'debug dependency removed correctly')
+  t.ok(project.hasNot('cookie'), 'cookie dependency removed correctly')
 })
 
 test('should not override root packages with flattened dependencies', async function (t) {
@@ -84,10 +84,10 @@ test('should reflatten after running a general install', async function (t) {
 
 test('should not override aliased dependencies', async (t: tape.Test) => {
   const project = prepare(t)
-  // now I install is-negative, but aliased as "tap". I do not want the "tap" dependency of jsonify to override my alias
-  await installPkgs(['tap@npm:is-negative@1.0.0', 'jsonify'], await testDefaults({shamefullyFlatten: true}))
+  // now I install is-negative, but aliased as "debug". I do not want the "debug" dependency of express to override my alias
+  await installPkgs(['debug@npm:is-negative@1.0.0', 'express'], await testDefaults({shamefullyFlatten: true}))
 
-  t.equal(project.requireModule('tap/package.json').version, '1.0.0', 'alias respected by flattening')
+  t.equal(project.requireModule('debug/package.json').version, '1.0.0', 'alias respected by flattening')
 })
 
 test('--shamefully-flatten throws exception when executed on node_modules installed w/o the option', async function (t: tape.Test) {
