@@ -158,11 +158,12 @@
     "commit": "commit",
     "commitmsg": "commitlint -e",
     "lint": "tslint -c tslint.json --project .",
+    "lint-test": "tslint -c tslint.json --project test",
     "pnpm-registry-mock": "pnpm-registry-mock",
     "test:tap": "ts-node test",
     "test:e2e": "npm-run-all -p -r pnpm-registry-mock test:tap",
     "pretest": "rimraf ../.tmp/ && pnpm-registry-mock prepare",
-    "test": "npm run lint && preview && npm run test:e2e",
+    "test": "npm run lint && npm run lint-test && preview && npm run test:e2e",
     "tsc": "rimraf lib && tsc",
     "prepublishOnly": "npm run tsc"
   },
