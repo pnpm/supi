@@ -46,7 +46,7 @@ test('should reflatten when uninstalling a package', async function (t) {
   // uninstall debug@3.1.0 to check if debug@2.6.9 gets reflattened
   await uninstall(['debug'], await testDefaults({shamefullyFlatten: true}))
 
-  t.equal(project.requireModule('debug/package.json').version, '2.6.9', 'debug did not get overridden by flattening')
+  t.equal(project.requireModule('debug/package.json').version, '2.6.9', 'debug was flattened after uninstall')
   t.equal(project.requireModule('express/package.json').version, '4.16.0', 'express did not get updated by flattening')
 })
 
