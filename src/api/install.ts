@@ -547,6 +547,7 @@ async function installInContext (
     outdatedPkgs: installCtx.outdatedPkgs,
     sideEffectsCache: opts.sideEffectsCache,
     shamefullyFlatten: opts.shamefullyFlatten,
+    reinstallForFlatten: Boolean(opts.reinstallForFlatten),
   })
 
   ctx.pendingBuilds = ctx.pendingBuilds

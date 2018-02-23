@@ -44,6 +44,7 @@ export default async function linkPackages (
     outdatedPkgs: {[pkgId: string]: string},
     sideEffectsCache: boolean,
     shamefullyFlatten: boolean,
+    reinstallForFlatten: boolean,
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -155,7 +156,7 @@ export default async function linkPackages (
     currentShrinkwrap = newCurrentShrinkwrap
   }
 
-  if (opts.shamefullyFlatten && (newDepPaths.length > 0 || removedPkgIds.size > 0)) {
+  if (opts.shamefullyFlatten && (opts.reinstallForFlatten || newDepPaths.length > 0 || removedPkgIds.size > 0)) {
     await shamefullyFlattenTree(flatResolvedDeps, currentShrinkwrap, opts)
   }
 
