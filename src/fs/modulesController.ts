@@ -16,6 +16,7 @@ export type Modules = {
   independentLeaves: boolean,
   pendingBuilds: string[],
   shamefullyFlatten: boolean,
+  flattenedPkgAliasesById: {[alias: string]: string}
 }
 
 export async function read (modulesPath: string): Promise<Modules | null> {

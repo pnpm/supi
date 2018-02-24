@@ -21,6 +21,7 @@ export default async function removeOrphanPkgs (
     shamefullyFlatten: boolean,
     storeController: StoreController,
     pruneStore?: boolean,
+    flattenedPkgAliasesById: {[alias: string]: string},
   }
 ): Promise<Set<string>> {
   const oldPkgs = R.toPairs(R.mergeAll(R.map(depType => opts.oldShrinkwrap[depType], dependenciesTypes)))
@@ -52,27 +53,18 @@ export default async function removeOrphanPkgs (
     if (notDependents.length) {
 
       if (opts.shamefullyFlatten && opts.oldShrinkwrap.packages) {
-        const packages = opts.oldShrinkwrap.packages
         await Promise.all(notDependents.map(async notDependent => {
-          const pkgShr = packages[dp.relative(opts.oldShrinkwrap.registry, notDependent)]
-          const pkgInfo = getPkgInfoFromShr(notDependent, pkgShr)
-          const rootLink = path.join(rootModules, pkgInfo.name)
-          // rootLink might not exist anymore because it might have been delete earlier
-          if (await exists(rootLink)) {
-            const linkTarget = await resolveLinkTarget(rootLink)
-            const notDependentDir = path.join(rootModules, `.${notDependent}`)
-            // we only want to remove the root link if it points to a version that we are removing
-            if (linkTarget.startsWith(notDependentDir)) {
-              await removeTopDependency({
-                name: pkgInfo.name,
-                dev: false,
-                optional: false,
-              }, {
-                modules: rootModules,
-                bin: opts.bin
-              })
-            }
+          if (opts.flattenedPkgAliasesById[notDependent]) {
+            await removeTopDependency({
+              name: opts.flattenedPkgAliasesById[notDependent],
+              dev: false,
+              optional: false,
+            }, {
+              modules: rootModules,
+              bin: opts.bin,
+            })
           }
+          delete opts.flattenedPkgAliasesById[notDependent]
         }))
       }
 

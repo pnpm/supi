@@ -548,7 +548,9 @@ async function installInContext (
     sideEffectsCache: opts.sideEffectsCache,
     shamefullyFlatten: opts.shamefullyFlatten,
     reinstallForFlatten: Boolean(opts.reinstallForFlatten),
+    flattenedPkgAliasesById: ctx.flattenedPkgAliasesById,
   })
+  ctx.flattenedPkgAliasesById = result.flattenedPkgAliasesById
 
   ctx.pendingBuilds = ctx.pendingBuilds
     .filter(pkgId => !result.removedPkgIds.has(dp.resolve(ctx.wantedShrinkwrap.registry, pkgId)))
@@ -576,6 +578,7 @@ async function installInContext (
           independentLeaves: opts.independentLeaves,
           pendingBuilds: ctx.pendingBuilds,
           shamefullyFlatten: opts.shamefullyFlatten,
+          flattenedPkgAliasesById: ctx.flattenedPkgAliasesById,
         }),
     ])
 

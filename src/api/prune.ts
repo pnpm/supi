@@ -48,6 +48,7 @@ export async function prune (
     storeController: opts.storeController,
     pruneStore: true,
     bin: opts.bin,
+    flattenedPkgAliasesById: ctx.flattenedPkgAliasesById,
   })
 
   if (reporter) {

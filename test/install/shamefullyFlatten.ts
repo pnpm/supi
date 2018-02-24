@@ -5,6 +5,7 @@ import {install, installPkgs, uninstall} from 'supi'
 import {prepare, testDefaults} from '../utils'
 
 const test = promisifyTape(tape)
+const testOnly = promisifyTape(tape.only)
 
 test('should flatten dependencies', async function (t) {
   const project = prepare(t)
@@ -111,4 +112,32 @@ test('--no-shamefully-flatten throws exception when executed on node_modules ins
   } catch (err) {
     t.ok(err.message.indexOf('This node_modules was installed with --shamefully-flatten option.') === 0)
   }
+})
+
+test('flatten by alias', async (t: tape.Test) => {
+  const project = prepare(t)
+
+  // pkg-with-1-aliased-dep aliases dep-of-pkg-with-1-dep as just "dep"
+  await installPkgs(['pkg-with-1-aliased-dep'], await testDefaults({shamefullyFlatten: true}))
+
+  await project.has('pkg-with-1-aliased-dep')
+  await project.has('dep')
+  await project.hasNot('dep-of-pkg-with-1-dep')
+})
+
+test('should remove aliased flattened dependencies', async function (t) {
+  const project = prepare(t)
+
+  await installPkgs(['pkg-with-1-aliased-dep'], await testDefaults({shamefullyFlatten: true}))
+  await uninstall(['pkg-with-1-aliased-dep'], await testDefaults({shamefullyFlatten: true}))
+
+  await project.hasNot('pkg-with-1-aliased-dep')
+  await project.hasNot('dep-of-pkg-with-1-dep')
+  let caught = false
+  try {
+    await resolveLinkTarget('./node_modules/dep')
+  } catch (e) {
+    caught = true
+  }
+  t.ok(caught, 'dep removed correctly')
 })

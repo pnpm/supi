@@ -45,6 +45,7 @@ export default async function linkPackages (
     sideEffectsCache: boolean,
     shamefullyFlatten: boolean,
     reinstallForFlatten: boolean,
+    flattenedPkgAliasesById: {[alias: string]: string},
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -52,6 +53,7 @@ export default async function linkPackages (
   currentShrinkwrap: Shrinkwrap,
   newDepPaths: string[],
   removedPkgIds: Set<string>,
+  flattenedPkgAliasesById: {[alias: string]: string},
 }> {
   // TODO: decide what kind of logging should be here.
   // The `Creating dependency tree` is not good to report in all cases as
@@ -69,6 +71,7 @@ export default async function linkPackages (
     shamefullyFlatten: opts.shamefullyFlatten,
     storeController: opts.storeController,
     bin: opts.bin,
+    flattenedPkgAliasesById: opts.flattenedPkgAliasesById,
   })
 
   let flatResolvedDeps =  R.values(pkgsToLink).filter(dep => !opts.skipped.has(dep.id))
@@ -156,8 +159,9 @@ export default async function linkPackages (
     currentShrinkwrap = newCurrentShrinkwrap
   }
 
+  // Important: shamefullyFlattenTree changes flatResolvedDeps, so keep this at the end
   if (opts.shamefullyFlatten && (opts.reinstallForFlatten || newDepPaths.length > 0 || removedPkgIds.size > 0)) {
-    await shamefullyFlattenTree(flatResolvedDeps, currentShrinkwrap, opts)
+    opts.flattenedPkgAliasesById = await shamefullyFlattenTree(flatResolvedDeps, rootNodeIdsByAlias, currentShrinkwrap, opts)
   }
 
   return {
@@ -166,11 +170,13 @@ export default async function linkPackages (
     currentShrinkwrap,
     newDepPaths,
     removedPkgIds,
+    flattenedPkgAliasesById: opts.flattenedPkgAliasesById,
   }
 }
 
 async function shamefullyFlattenTree(
   flatResolvedDeps: DependencyTreeNode[],
+  rootNodeIdsByAlias: {[alias: string]: string},
   currentShrinkwrap: Shrinkwrap,
   opts: {
     force: boolean,
@@ -180,36 +186,44 @@ async function shamefullyFlattenTree(
     pkg: PackageJson,
     outdatedPkgs: {[pkgId: string]: string},
   },
-) {
-  const pkgNamesExcludedFromFlattening = {}
-  // first of all, exclude the root packages, as they are already linked
-  for (let name of R.keys(currentShrinkwrap.specifiers)) {
-    pkgNamesExcludedFromFlattening[name] = true
-  }
+): Promise<{[alias: string]: string}> {
+  const pkgIdByAlias = {}
+  const aliasByPkgId: {[alias: string]: string} = {}
 
   await Promise.all(flatResolvedDeps
-    // map to make a copy before the sort
     // sort by depth and then alphabetically
-    .map(pkg => pkg).sort((a, b) => {
+    .sort((a, b) => {
       const depthDiff = a.depth - b.depth
       return depthDiff === 0 ? a.name.localeCompare(b.name) : depthDiff
     })
-    .filter(pkg => {
-      const shouldAdd = !pkgNamesExcludedFromFlattening[pkg.name]
-      // after we add the package to the packages to flatten, exclude subsequent packages with the same name
-      if (shouldAdd) {
-        pkgNamesExcludedFromFlattening[pkg.name] = true
+    // build the alias map and the id map
+    .map(pkg => {
+      for (let childAlias of R.keys(pkg.children)) {
+        // if this alias is in the root dependencies, skip it
+        if (rootNodeIdsByAlias[childAlias]) {
+          continue
+        }
+        // if this alias has already been taken, skip it
+        if (pkgIdByAlias[childAlias]) {
+          continue
+        }
+        pkgIdByAlias[childAlias] = pkg.children[childAlias]
+        aliasByPkgId[pkg.children[childAlias]] = childAlias
       }
-      return shouldAdd
+      return pkg
     })
     .map(async pkg => {
-      if (opts.dryRun || !(await symlinkDependencyTo(pkg.name, pkg, opts.baseNodeModules)).reused) {
+      const pkgAlias = aliasByPkgId[pkg.id]
+      if (!pkgAlias) {
+        return
+      }
+      if (opts.dryRun || !(await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)).reused) {
         const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
         const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
         rootLogger.info({
           added: {
             id: pkg.id,
-            name: pkg.name,
+            name: pkgAlias,
             realName: pkg.name,
             version: pkg.version,
             latest: opts.outdatedPkgs[pkg.id],
@@ -222,6 +236,8 @@ async function shamefullyFlattenTree(
         pkgId: pkg.id,
       })
     }))
+
+  return aliasByPkgId
 }
 
 function filterShrinkwrap (
