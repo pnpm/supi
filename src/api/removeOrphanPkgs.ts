@@ -21,7 +21,7 @@ export default async function removeOrphanPkgs (
     shamefullyFlatten: boolean,
     storeController: StoreController,
     pruneStore?: boolean,
-    flattenedPkgAliasesById: {[alias: string]: string},
+    hoistedAliases: {[pkgId: string]: string[]},
   }
 ): Promise<Set<string>> {
   const oldPkgs = R.toPairs(R.mergeAll(R.map(depType => opts.oldShrinkwrap[depType], dependenciesTypes)))
@@ -54,17 +54,19 @@ export default async function removeOrphanPkgs (
 
       if (opts.shamefullyFlatten && opts.oldShrinkwrap.packages) {
         await Promise.all(notDependents.map(async notDependent => {
-          if (opts.flattenedPkgAliasesById[notDependent]) {
-            await removeTopDependency({
-              name: opts.flattenedPkgAliasesById[notDependent],
-              dev: false,
-              optional: false,
-            }, {
-              modules: rootModules,
-              bin: opts.bin,
-            })
+          if (opts.hoistedAliases[notDependent]) {
+            await Promise.all(opts.hoistedAliases[notDependent].map(async alias => {
+              await removeTopDependency({
+                name: alias,
+                dev: false,
+                optional: false,
+              }, {
+                modules: rootModules,
+                bin: opts.bin,
+              })
+            }))
           }
-          delete opts.flattenedPkgAliasesById[notDependent]
+          delete opts.hoistedAliases[notDependent]
         }))
       }
 

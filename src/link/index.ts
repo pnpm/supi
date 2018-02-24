@@ -45,7 +45,7 @@ export default async function linkPackages (
     sideEffectsCache: boolean,
     shamefullyFlatten: boolean,
     reinstallForFlatten: boolean,
-    flattenedPkgAliasesById: {[alias: string]: string},
+    hoistedAliases: {[pkgId: string]: string[]},
   }
 ): Promise<{
   linkedPkgsMap: DependencyTreeNodeMap,
@@ -53,7 +53,7 @@ export default async function linkPackages (
   currentShrinkwrap: Shrinkwrap,
   newDepPaths: string[],
   removedPkgIds: Set<string>,
-  flattenedPkgAliasesById: {[alias: string]: string},
+  hoistedAliases: {[pkgId: string]: string[]},
 }> {
   // TODO: decide what kind of logging should be here.
   // The `Creating dependency tree` is not good to report in all cases as
@@ -71,7 +71,7 @@ export default async function linkPackages (
     shamefullyFlatten: opts.shamefullyFlatten,
     storeController: opts.storeController,
     bin: opts.bin,
-    flattenedPkgAliasesById: opts.flattenedPkgAliasesById,
+    hoistedAliases: opts.hoistedAliases,
   })
 
   let flatResolvedDeps =  R.values(pkgsToLink).filter(dep => !opts.skipped.has(dep.id))
@@ -161,7 +161,7 @@ export default async function linkPackages (
 
   // Important: shamefullyFlattenTree changes flatResolvedDeps, so keep this at the end
   if (opts.shamefullyFlatten && (opts.reinstallForFlatten || newDepPaths.length > 0 || removedPkgIds.size > 0)) {
-    opts.flattenedPkgAliasesById = await shamefullyFlattenTree(flatResolvedDeps, rootNodeIdsByAlias, currentShrinkwrap, opts)
+    opts.hoistedAliases = await shamefullyFlattenTree(flatResolvedDeps, rootNodeIdsByAlias, currentShrinkwrap, opts)
   }
 
   return {
@@ -170,7 +170,7 @@ export default async function linkPackages (
     currentShrinkwrap,
     newDepPaths,
     removedPkgIds,
-    flattenedPkgAliasesById: opts.flattenedPkgAliasesById,
+    hoistedAliases: opts.hoistedAliases,
   }
 }
 
@@ -186,9 +186,9 @@ async function shamefullyFlattenTree(
     pkg: PackageJson,
     outdatedPkgs: {[pkgId: string]: string},
   },
-): Promise<{[alias: string]: string}> {
+): Promise<{[alias: string]: string[]}> {
   const pkgIdByAlias = {}
-  const aliasByPkgId: {[alias: string]: string} = {}
+  const aliasByPkgId: {[pkgId: string]: string[]} = {}
 
   await Promise.all(flatResolvedDeps
     // sort by depth and then alphabetically
@@ -207,30 +207,36 @@ async function shamefullyFlattenTree(
         if (pkgIdByAlias[childAlias]) {
           continue
         }
-        pkgIdByAlias[childAlias] = pkg.children[childAlias]
-        aliasByPkgId[pkg.children[childAlias]] = childAlias
+        const childId = pkg.children[childAlias]
+        pkgIdByAlias[childAlias] = childId
+        if (!aliasByPkgId[childId]) {
+          aliasByPkgId[childId] = []
+        }
+        aliasByPkgId[childId].push(childAlias)
       }
       return pkg
     })
     .map(async pkg => {
-      const pkgAlias = aliasByPkgId[pkg.id]
-      if (!pkgAlias) {
+      const pkgAliases = aliasByPkgId[pkg.id]
+      if (!pkgAliases) {
         return
       }
-      if (opts.dryRun || !(await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)).reused) {
-        const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
-        const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
-        rootLogger.info({
-          added: {
-            id: pkg.id,
-            name: pkgAlias,
-            realName: pkg.name,
-            version: pkg.version,
-            latest: opts.outdatedPkgs[pkg.id],
-            dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
-          },
-        })
-      }
+      await Promise.all(pkgAliases.map(async pkgAlias => {
+        if (opts.dryRun || !(await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)).reused) {
+          const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
+          const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
+          rootLogger.info({
+            added: {
+              id: pkg.id,
+              name: pkgAlias,
+              realName: pkg.name,
+              version: pkg.version,
+              latest: opts.outdatedPkgs[pkg.id],
+              dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
+            },
+          })
+        }
+      }))
       logStatus({
         status: 'installed',
         pkgId: pkg.id,

@@ -32,7 +32,7 @@ export type PnpmContext = {
   wantedShrinkwrap: Shrinkwrap,
   skipped: Set<string>,
   pendingBuilds: string[],
-  flattenedPkgAliasesById: {[alias: string]: string}
+  hoistedAliases: {[pkgId: string]: string[]}
 }
 
 export default async function getContext (
@@ -105,7 +105,7 @@ export default async function getContext (
     existsCurrentShrinkwrap: !!files[2],
     skipped: new Set(modules && modules.skipped || []),
     pendingBuilds: modules && modules.pendingBuilds || [],
-    flattenedPkgAliasesById: modules && modules.flattenedPkgAliasesById || {},
+    hoistedAliases: modules && modules.hoistedAliases || {},
   }
   packageJsonLogger.debug({ initial: ctx.pkg })
 

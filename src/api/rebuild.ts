@@ -133,7 +133,7 @@ export async function rebuild (maybeOpts: RebuildOptions) {
     independentLeaves: opts.independentLeaves,
     pendingBuilds: [],
     shamefullyFlatten: opts.shamefullyFlatten,
-    flattenedPkgAliasesById: ctx.flattenedPkgAliasesById,
+    hoistedAliases: ctx.hoistedAliases,
   })
 }
 
