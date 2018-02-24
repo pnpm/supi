@@ -1,7 +1,7 @@
 import resolveLinkTarget = require('resolve-link-target')
 import tape = require('tape')
 import promisifyTape from 'tape-promise'
-import {install, installPkgs, uninstall} from 'supi'
+import {install, installPkgs, uninstall, prune} from 'supi'
 import {prepare, testDefaults} from '../utils'
 
 const test = promisifyTape(tape)
@@ -28,7 +28,7 @@ test('should remove flattened dependencies', async function (t) {
   await project.hasNot('cookie')
 })
 
-testOnly('should not override root packages with flattened dependencies', async function (t) {
+test('should not override root packages with flattened dependencies', async function (t) {
   const project = prepare(t)
 
   // this installs debug@3.1.0
@@ -123,6 +123,9 @@ test('flatten by alias', async (t: tape.Test) => {
   await project.has('pkg-with-1-aliased-dep')
   await project.has('dep')
   await project.hasNot('dep-of-pkg-with-1-dep')
+
+  const modules = await project.loadModules()
+  t.deepEqual(modules.hoistedAliases, {'localhost+4873/dep-of-pkg-with-1-dep/100.1.0': [ 'dep' ]}, '.modules.yaml updated correctly')
 })
 
 test('should remove aliased flattened dependencies', async function (t) {
@@ -140,4 +143,24 @@ test('should remove aliased flattened dependencies', async function (t) {
     caught = true
   }
   t.ok(caught, 'dep removed correctly')
+
+  const modules = await project.loadModules()
+  t.deepEqual(modules.hoistedAliases, {}, '.modules.yaml updated correctly')
+})
+
+test('should update .modules.yaml when pruning if we are flattening', async function (t) {
+  const project = prepare(t, {
+    dependencies: {
+      'pkg-with-1-aliased-dep': '*'
+    }
+  })
+
+  await install(await testDefaults({shamefullyFlatten: true}))
+
+  await project.rewriteDependencies({})
+
+  await prune(await testDefaults({shamefullyFlatten: true}))
+
+  const modules = await project.loadModules()
+  t.deepEqual(modules.hoistedAliases, {}, '.modules.yaml updated correctly')
 })
