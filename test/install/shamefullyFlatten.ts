@@ -28,7 +28,7 @@ test('should remove flattened dependencies', async function (t) {
   await project.hasNot('cookie')
 })
 
-test('should not override root packages with flattened dependencies', async function (t) {
+testOnly('should not override root packages with flattened dependencies', async function (t) {
   const project = prepare(t)
 
   // this installs debug@3.1.0

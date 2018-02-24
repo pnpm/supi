@@ -161,7 +161,7 @@ export default async function linkPackages (
 
   // Important: shamefullyFlattenTree changes flatResolvedDeps, so keep this at the end
   if (opts.shamefullyFlatten && (opts.reinstallForFlatten || newDepPaths.length > 0 || removedPkgIds.size > 0)) {
-    opts.hoistedAliases = await shamefullyFlattenTree(flatResolvedDeps, rootNodeIdsByAlias, currentShrinkwrap, opts)
+    opts.hoistedAliases = await shamefullyFlattenTree(flatResolvedDeps, currentShrinkwrap, opts)
   }
 
   return {
@@ -176,7 +176,6 @@ export default async function linkPackages (
 
 async function shamefullyFlattenTree(
   flatResolvedDeps: DependencyTreeNode[],
-  rootNodeIdsByAlias: {[alias: string]: string},
   currentShrinkwrap: Shrinkwrap,
   opts: {
     force: boolean,
@@ -200,7 +199,7 @@ async function shamefullyFlattenTree(
     .map(pkg => {
       for (let childAlias of R.keys(pkg.children)) {
         // if this alias is in the root dependencies, skip it
-        if (rootNodeIdsByAlias[childAlias]) {
+        if (currentShrinkwrap.specifiers[childAlias]) {
           continue
         }
         // if this alias has already been taken, skip it
