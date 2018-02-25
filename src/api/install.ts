@@ -284,7 +284,7 @@ export async function installPkgs (
         devDependencies,
       })
 
-    if (!Object.keys(packagesToInstall).length) {
+    if (!Object.keys(packagesToInstall).length && !opts.reinstallForFlatten) {
       throw new Error('At least one package has to be installed')
     }
 

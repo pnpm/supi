@@ -164,3 +164,37 @@ test('should update .modules.yaml when pruning if we are flattening', async func
   const modules = await project.loadModules()
   t.deepEqual(modules.hoistedAliases, {}, '.modules.yaml updated correctly')
 })
+
+test('should reflatten after pruning', async function (t) {
+  const project = prepare(t, {
+    dependencies: {
+      debug: '3.1.0',
+      express: '4.16.0'
+    }
+  })
+
+  await install(await testDefaults({shamefullyFlatten: true}))
+
+  t.equal(project.requireModule('debug/package.json').version, '3.1.0', 'debug installed correctly')
+  t.equal(project.requireModule('express/package.json').version, '4.16.0', 'express installed correctly')
+
+  // read this module path because we can't use requireModule again, as it is cached
+  const prevDebugModulePath = await resolveLinkTarget('./node_modules/debug')
+  const prevExpressModulePath = await resolveLinkTarget('./node_modules/express')
+
+  // now remove debug@3.1.0 from package.json, run install again, check that debug@2.6.9 has been flattened
+  // and that ms is still there, and that is-positive is not installed
+  await project.rewriteDependencies({
+    express: '4.16.0',
+    'is-positive': '1.0.0',
+  })
+
+  await prune(await testDefaults({shamefullyFlatten: true}))
+
+  const currDebugModulePath = await resolveLinkTarget('./node_modules/debug')
+  const currExpressModulePath = await resolveLinkTarget('./node_modules/express')
+  t.notEqual(prevDebugModulePath, currDebugModulePath, 'debug flattened correctly')
+  t.equal(prevExpressModulePath, currExpressModulePath, 'express not updated')
+
+  await project.hasNot('is-positive')
+})
