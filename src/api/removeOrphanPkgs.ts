@@ -60,7 +60,7 @@ export default async function removeOrphanPkgs (
               }, {
                 modules: rootModules,
                 bin: opts.bin,
-                skipLogs: true
+                muteLogs: true
               })
             }))
           }

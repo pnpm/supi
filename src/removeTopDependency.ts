@@ -14,7 +14,7 @@ export default async function removeTopDependency (
     dryRun?: boolean,
     modules: string,
     bin: string,
-    skipLogs?: boolean,
+    muteLogs?: boolean,
   }
 ) {
   const results = await Promise.all([
@@ -23,7 +23,7 @@ export default async function removeTopDependency (
   ])
 
   const uninstalledPkg = results[0]
-  if (!opts.skipLogs) {
+  if (!opts.muteLogs) {
     rootLogger.info({
       removed: {
         name: dependency.name,
