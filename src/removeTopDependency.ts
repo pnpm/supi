@@ -14,6 +14,7 @@ export default async function removeTopDependency (
     dryRun?: boolean,
     modules: string,
     bin: string,
+    skipLogs?: boolean,
   }
 ) {
   const results = await Promise.all([
@@ -22,13 +23,15 @@ export default async function removeTopDependency (
   ])
 
   const uninstalledPkg = results[0]
-  rootLogger.info({
-    removed: {
-      name: dependency.name,
-      version: uninstalledPkg && uninstalledPkg.version,
-      dependencyType: dependency.dev && 'dev' || dependency.optional && 'optional' || 'prod'
-    },
-  })
+  if (!opts.skipLogs) {
+    rootLogger.info({
+      removed: {
+        name: dependency.name,
+        version: uninstalledPkg && uninstalledPkg.version,
+        dependencyType: dependency.dev && 'dev' || dependency.optional && 'optional' || 'prod'
+      },
+    })
+  }
 }
 
 async function removeBins (

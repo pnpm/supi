@@ -221,25 +221,10 @@ async function shamefullyFlattenTree(
         return
       }
       await Promise.all(pkgAliases.map(async pkgAlias => {
-        if (opts.dryRun || !(await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)).reused) {
-          const isDev = opts.pkg.devDependencies && opts.pkg.devDependencies[pkg.name]
-          const isOptional = opts.pkg.optionalDependencies && opts.pkg.optionalDependencies[pkg.name]
-          rootLogger.info({
-            added: {
-              id: pkg.id,
-              name: pkgAlias,
-              realName: pkg.name,
-              version: pkg.version,
-              latest: opts.outdatedPkgs[pkg.id],
-              dependencyType: isDev && 'dev' || isOptional && 'optional' || 'prod',
-            },
-          })
+        if (!opts.dryRun) {
+          await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)
         }
       }))
-      logStatus({
-        status: 'installed',
-        pkgId: pkg.id,
-      })
     }))
 
   return aliasByPkgId
