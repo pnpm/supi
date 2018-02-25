@@ -220,11 +220,13 @@ async function shamefullyFlattenTree(
       if (!pkgAliases) {
         return
       }
-      await Promise.all(pkgAliases.map(async pkgAlias => {
-        if (!opts.dryRun) {
+      // TODO when putting logs back in for hoisted packages, you've to put back the condition inside the map,
+      // TODO look how it is done in linkPackages
+      if (!opts.dryRun) {
+        await Promise.all(pkgAliases.map(async pkgAlias => {
           await symlinkDependencyTo(pkgAlias, pkg, opts.baseNodeModules)
-        }
-      }))
+        }))
+      }
     }))
 
   return aliasByPkgId

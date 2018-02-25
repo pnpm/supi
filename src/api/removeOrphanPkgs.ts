@@ -3,13 +3,10 @@ import path = require('path')
 import * as dp from 'dependency-path'
 import {Shrinkwrap, ResolvedPackages} from 'pnpm-shrinkwrap'
 import {StoreController} from 'package-store'
-import exists = require('path-exists')
 import R = require('ramda')
-import resolveLinkTarget = require('resolve-link-target')
 import removeTopDependency from '../removeTopDependency'
 import {dependenciesTypes} from '../getSaveType'
 import {statsLogger} from '../loggers'
-import getPkgInfoFromShr from '../getPkgInfoFromShr'
 
 export default async function removeOrphanPkgs (
   opts: {

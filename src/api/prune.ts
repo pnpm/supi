@@ -46,9 +46,7 @@ export async function prune (
   })
 
   if (opts.shamefullyFlatten) {
-    await installPkgs(prunedShr.specifiers, Object.assign({},
-      opts, {lock: false, reinstallForFlatten: true, update: false}
-    ))
+    await installPkgs(prunedShr.specifiers, {...opts, lock: false, reinstallForFlatten: true, update: false})
   }
 
   if (reporter) {

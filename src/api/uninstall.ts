@@ -103,9 +103,7 @@ export async function uninstallInContext (
   })
 
   if (opts.shamefullyFlatten) {
-    await installPkgs(currentShrinkwrap.specifiers, Object.assign({},
-      opts, {lock: false, reinstallForFlatten: true, update: false}
-    ))
+    await installPkgs(currentShrinkwrap.specifiers, {...opts, lock: false, reinstallForFlatten: true, update: false})
   }
 
   logger('summary').info()
