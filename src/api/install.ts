@@ -1,9 +1,7 @@
+import fs = require('mz/fs')
 import {
   Dependencies,
   PackageJson,
-  PnpmOptions,
-  StrictPnpmOptions,
-  ReadPackageHook,
 } from '@pnpm/types'
 import * as dp from 'dependency-path'
 import path = require('path')
@@ -24,8 +22,6 @@ import safeIsInnerLink from '../safeIsInnerLink'
 import {fromDir as safeReadPkgFromDir} from '../fs/safeReadPkg'
 import {
   WantedDependency,
-  SupiOptions,
-  ReporterFunction,
 } from '../types'
 import getContext, {PnpmContext} from './getContext'
 import resolveDependencies, {InstalledPackage} from '../resolveDependencies'
@@ -44,15 +40,12 @@ import {
   writeWantedOnly as saveWantedShrinkwrapOnly,
   writeCurrentOnly as saveCurrentShrinkwrapOnly,
   Shrinkwrap,
-  ResolvedDependencies,
 } from 'pnpm-shrinkwrap'
 import {absolutePathToRef} from '../fs/shrinkwrap'
 import {
   save as saveModules,
   LAYOUT_VERSION,
 } from '../fs/modulesController'
-import mkdirp = require('mkdirp-promise')
-import createMemoize, {MemoizedFunc} from '../memoize'
 import {DependencyTreeNode} from '../link/resolvePeers'
 import depsToSpecs, {similarDepsToSpecs} from '../depsToSpecs'
 import shrinkwrapsEqual from './shrinkwrapsEqual'
@@ -60,7 +53,6 @@ import {
   StoreController,
 } from 'package-store'
 import depsFromPackage, {getPreferredVersionsFromPackage} from '../depsFromPackage'
-import writePkg = require('write-pkg')
 import parseWantedDependencies from '../parseWantedDependencies'
 import {
   DirectoryResolution,
@@ -325,7 +317,7 @@ async function installInContext (
     logger.warn('`node_modules` is present. Shrinkwrap only installation will make it out-of-date')
   }
 
-  const nodeModulesPath = path.join(ctx.root, 'node_modules')
+  const nodeModulesPath = await fs.realpath(path.join(ctx.root, 'node_modules'))
 
   // This works from minor version 1, so any number is fine
   // also, the shrinkwrapMinorVersion is going to be removed from shrinkwrap v4
@@ -636,7 +628,7 @@ async function installInContext (
         linkToBin: opts.bin,
       }
       await Promise.all(installCtx.localPackages.map(async localPackage => {
-        await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
+        await externalLink(localPackage.resolution.directory, installCtx.nodeModules, linkOpts)
         logStatus({
           status: 'installed',
           pkgId: localPackage.id,

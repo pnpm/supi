@@ -5,7 +5,6 @@ import logger, {streamParser} from '@pnpm/logger'
 import {install} from './install'
 import pathAbsolute = require('path-absolute')
 import {linkPkgBins} from '../link/linkBins'
-import {PnpmOptions} from '@pnpm/types'
 import extendOptions, {
   InstallOptions,
 } from './extendInstallOptions'
@@ -35,10 +34,9 @@ export default async function link (
     })
   }
 
-  const destModules = path.join(linkTo, 'node_modules')
-  await linkToModules(linkFrom, destModules)
+  await linkToModules(linkFrom, linkTo)
 
-  const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
+  const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(linkTo, '.bin')
   await linkPkgBins(linkFrom, linkToBin)
 
   if (reporter) {
