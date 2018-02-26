@@ -186,8 +186,8 @@ async function shamefullyFlattenTree(
     outdatedPkgs: {[pkgId: string]: string},
   },
 ): Promise<{[alias: string]: string[]}> {
-  const pkgIdByAlias = {}
-  const aliasByPkgId: {[pkgId: string]: string[]} = {}
+  const pkgPathByAlias = {}
+  const aliasesByPkgPath: {[pkgId: string]: string[]} = {}
 
   await Promise.all(flatResolvedDeps
     // sort by depth and then alphabetically
@@ -203,20 +203,20 @@ async function shamefullyFlattenTree(
           continue
         }
         // if this alias has already been taken, skip it
-        if (pkgIdByAlias[childAlias]) {
+        if (pkgPathByAlias[childAlias]) {
           continue
         }
-        const childId = pkg.children[childAlias]
-        pkgIdByAlias[childAlias] = childId
-        if (!aliasByPkgId[childId]) {
-          aliasByPkgId[childId] = []
+        const childPath = pkg.children[childAlias]
+        pkgPathByAlias[childAlias] = childPath
+        if (!aliasesByPkgPath[childPath]) {
+          aliasesByPkgPath[childPath] = []
         }
-        aliasByPkgId[childId].push(childAlias)
+        aliasesByPkgPath[childPath].push(childAlias)
       }
       return pkg
     })
     .map(async pkg => {
-      const pkgAliases = aliasByPkgId[pkg.id]
+      const pkgAliases = aliasesByPkgPath[pkg.absolutePath]
       if (!pkgAliases) {
         return
       }
@@ -229,7 +229,7 @@ async function shamefullyFlattenTree(
       }
     }))
 
-  return aliasByPkgId
+  return aliasesByPkgPath
 }
 
 function filterShrinkwrap (
