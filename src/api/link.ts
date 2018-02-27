@@ -8,13 +8,12 @@ import {linkPkgBins} from '../link/linkBins'
 import extendOptions, {
   InstallOptions,
 } from './extendInstallOptions'
-import realNodeModulesDir from '../fs/realNodeModulesDir'
 
 const linkLogger = logger('link')
 
 export default async function link (
   linkFrom: string,
-  linkTo: string,
+  destModules: string,
   maybeOpts: InstallOptions & {
     skipInstall?: boolean,
     linkToBin?: string,
@@ -35,7 +34,6 @@ export default async function link (
     })
   }
 
-  const destModules = await realNodeModulesDir(linkTo)
   await linkToModules(linkFrom, destModules)
 
   const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
@@ -65,7 +63,7 @@ export async function linkFromGlobal (
   const opts = await extendOptions(maybeOpts)
   const globalPkgPath = pathAbsolute(maybeOpts.globalPrefix)
   const linkedPkgPath = path.join(globalPkgPath, 'node_modules', pkgName)
-  await link(linkedPkgPath, linkTo, opts)
+  await link(linkedPkgPath, path.join(linkTo, 'node_modules'), opts)
 
   if (reporter) {
     streamParser.removeListener('data', reporter)
@@ -85,7 +83,7 @@ export async function linkToGlobal (
   }
   const opts = await extendOptions(maybeOpts)
   const globalPkgPath = pathAbsolute(maybeOpts.globalPrefix)
-  await link(linkFrom, globalPkgPath, {
+  await link(linkFrom, path.join(globalPkgPath, 'node_modules'), {
     ...opts,
     linkToBin: maybeOpts.globalBin,
   })

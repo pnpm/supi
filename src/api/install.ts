@@ -628,7 +628,7 @@ async function installInContext (
         linkToBin: opts.bin,
       }
       await Promise.all(installCtx.localPackages.map(async localPackage => {
-        await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
+        await externalLink(localPackage.resolution.directory, installCtx.nodeModules, linkOpts)
         logStatus({
           status: 'installed',
           pkgId: localPackage.id,

@@ -29,7 +29,7 @@ test('relative link', async (t: tape.Test) => {
   const linkedPkgPath = path.resolve('..', linkedPkgName)
 
   await ncp(pathToLocalPkg(linkedPkgName), linkedPkgPath)
-  await link(`../${linkedPkgName}`, process.cwd(), await testDefaults())
+  await link(`../${linkedPkgName}`, path.join(process.cwd(), 'node_modules'), await testDefaults())
 
   await isExecutable(t, path.resolve('node_modules', '.bin', 'hello-world-js-bin'))
 
@@ -45,7 +45,7 @@ test('relative link is not rewritten by install', async (t: tape.Test) => {
   const linkedPkgPath = path.resolve('..', linkedPkgName)
 
   await ncp(pathToLocalPkg(linkedPkgName), linkedPkgPath)
-  await link(`../${linkedPkgName}`, process.cwd(), await testDefaults())
+  await link(`../${linkedPkgName}`, path.join(process.cwd(), 'node_modules'), await testDefaults())
 
   const reporter = sinon.spy()
 
