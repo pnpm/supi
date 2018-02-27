@@ -55,7 +55,7 @@ test('local file', async function (t: tape.Test) {
   })
 })
 
-testOnly('local file with symlinked node_modules', async function (t: tape.Test) {
+test('local file with symlinked node_modules', async function (t: tape.Test) {
   const project = prepare(t)
   await ncp(pathToLocalPkg('local-pkg'), path.resolve('..', 'local-pkg'))
   await fs.mkdir(path.join('..', 'node_modules'))
