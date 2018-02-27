@@ -8,6 +8,7 @@ import {linkPkgBins} from '../link/linkBins'
 import extendOptions, {
   InstallOptions,
 } from './extendInstallOptions'
+import realNodeModulesDir from '../fs/realNodeModulesDir'
 
 const linkLogger = logger('link')
 
@@ -34,9 +35,10 @@ export default async function link (
     })
   }
 
-  await linkToModules(linkFrom, linkTo)
+  const destModules = await realNodeModulesDir(linkTo)
+  await linkToModules(linkFrom, destModules)
 
-  const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(linkTo, '.bin')
+  const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
   await linkPkgBins(linkFrom, linkToBin)
 
   if (reporter) {

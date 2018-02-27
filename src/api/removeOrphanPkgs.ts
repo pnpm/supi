@@ -7,6 +7,7 @@ import R = require('ramda')
 import removeTopDependency from '../removeTopDependency'
 import {dependenciesTypes} from '../getSaveType'
 import {statsLogger} from '../loggers'
+import realNodeModulesDir from '../fs/realNodeModulesDir'
 
 export default async function removeOrphanPkgs (
   opts: {
@@ -26,7 +27,7 @@ export default async function removeOrphanPkgs (
 
   const removedTopDeps: [string, string][] = R.difference(oldPkgs, newPkgs) as [string, string][]
 
-  const rootModules = path.join(opts.prefix, 'node_modules')
+  const rootModules = await realNodeModulesDir(opts.prefix)
   await Promise.all(removedTopDeps.map(depName => {
     return removeTopDependency({
       name: depName[0],

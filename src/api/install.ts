@@ -1,4 +1,3 @@
-import fs = require('mz/fs')
 import {
   Dependencies,
   PackageJson,
@@ -63,6 +62,7 @@ import {
   createNodeId,
   ROOT_NODE_ID,
 } from '../nodeIdUtils'
+import realNodeModulesDir from '../fs/realNodeModulesDir'
 
 const ENGINE_NAME = `${process.platform}-${process.arch}-node-${process.version.split('.')[0]}`
 
@@ -183,7 +183,7 @@ export async function install (maybeOpts: InstallOptions) {
 
     const scriptsOpts = {
       rawNpmConfig: opts.rawNpmConfig,
-      modulesDir: path.join(opts.prefix, 'node_modules'),
+      modulesDir: await realNodeModulesDir(opts.prefix),
       root: opts.prefix,
       pkgId: opts.prefix,
       stdio: 'inherit',
@@ -317,10 +317,7 @@ async function installInContext (
     logger.warn('`node_modules` is present. Shrinkwrap only installation will make it out-of-date')
   }
 
-  let nodeModulesPath = path.join(ctx.root, 'node_modules')
-  if (await fs.exists(nodeModulesPath)) {
-    nodeModulesPath = await fs.realpath(nodeModulesPath)
-  }
+  const nodeModulesPath = await realNodeModulesDir(ctx.root)
 
   // This works from minor version 1, so any number is fine
   // also, the shrinkwrapMinorVersion is going to be removed from shrinkwrap v4
@@ -631,7 +628,7 @@ async function installInContext (
         linkToBin: opts.bin,
       }
       await Promise.all(installCtx.localPackages.map(async localPackage => {
-        await externalLink(localPackage.resolution.directory, installCtx.nodeModules, linkOpts)
+        await externalLink(localPackage.resolution.directory, opts.prefix, linkOpts)
         logStatus({
           status: 'installed',
           pkgId: localPackage.id,
