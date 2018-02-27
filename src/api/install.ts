@@ -317,7 +317,10 @@ async function installInContext (
     logger.warn('`node_modules` is present. Shrinkwrap only installation will make it out-of-date')
   }
 
-  const nodeModulesPath = await fs.realpath(path.join(ctx.root, 'node_modules'))
+  let nodeModulesPath = path.join(ctx.root, 'node_modules')
+  if (await fs.exists(nodeModulesPath)) {
+    nodeModulesPath = await fs.realpath(nodeModulesPath)
+  }
 
   // This works from minor version 1, so any number is fine
   // also, the shrinkwrapMinorVersion is going to be removed from shrinkwrap v4
