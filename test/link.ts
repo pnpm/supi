@@ -23,7 +23,7 @@ import {
 import exists = require('path-exists')
 
 test('relative link', async (t: tape.Test) => {
-  prepare(t)
+  const project = prepare(t)
 
   const linkedPkgName = 'hello-world-js-bin'
   const linkedPkgPath = path.resolve('..', linkedPkgName)
@@ -36,6 +36,12 @@ test('relative link', async (t: tape.Test) => {
   // The linked package has been installed successfully as well with bins linked
   // to node_modules/.bin
   await isExecutable(t, path.join(linkedPkgPath, 'node_modules', '.bin', 'cowsay'))
+
+  const wantedShrinkwrap = await project.loadShrinkwrap()
+  t.equal(wantedShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link added to wanted shrinkwrap')
+
+  const currentShrinkwrap = await project.loadCurrentShrinkwrap()
+  t.equal(currentShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link added to wanted shrinkwrap')
 })
 
 test('relative link is not rewritten by install', async (t: tape.Test) => {
@@ -63,6 +69,12 @@ test('relative link is not rewritten by install', async (t: tape.Test) => {
       // TODO: the dependencyType should be `undefined` in this case
     },
   }), 'linked root dependency logged')
+
+  const wantedShrinkwrap = await project.loadShrinkwrap()
+  t.equal(wantedShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link still in wanted shrinkwrap')
+
+  const currentShrinkwrap = await project.loadCurrentShrinkwrap()
+  t.equal(currentShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link still in wanted shrinkwrap')
 })
 
 test('global link', async function (t: tape.Test) {

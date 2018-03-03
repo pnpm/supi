@@ -168,7 +168,9 @@ export async function install (maybeOpts: InstallOptions) {
       ctx.wantedShrinkwrap.optionalDependencies = ctx.wantedShrinkwrap.optionalDependencies || {}
       for (const spec of specs) {
         if (spec.alias && ctx.wantedShrinkwrap.specifiers[spec.alias] !== spec.pref) {
-          delete ctx.wantedShrinkwrap.dependencies[spec.alias]
+          if (ctx.wantedShrinkwrap.dependencies[spec.alias] && !ctx.wantedShrinkwrap.dependencies[spec.alias].startsWith('link:')) {
+            delete ctx.wantedShrinkwrap.dependencies[spec.alias]
+          }
           delete ctx.wantedShrinkwrap.devDependencies[spec.alias]
           delete ctx.wantedShrinkwrap.optionalDependencies[spec.alias]
         }
