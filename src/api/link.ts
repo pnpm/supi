@@ -6,12 +6,13 @@ import {PackageJson} from '@pnpm/types'
 import {install} from './install'
 import pathAbsolute = require('path-absolute')
 import normalize = require('normalize-path')
+import R = require('ramda')
 import {linkPkgBins} from '../link/linkBins'
 import extendOptions, {
   InstallOptions,
 } from './extendInstallOptions'
 import readShrinkwrapFile from '../readShrinkwrapFiles'
-import {prune as pruneNodeModules} from './prune'
+import removeOrphanPkgs from './removeOrphanPkgs'
 import pLimit = require('p-limit')
 import {
   Shrinkwrap,
@@ -21,6 +22,9 @@ import {
 } from 'pnpm-shrinkwrap'
 import readPackage from '../fs/readPkg'
 import getSpecFromPackageJson from '../getSpecFromPackageJson'
+import {
+  read as readModules,
+} from '../fs/modulesController'
 
 const linkLogger = logger('link')
 const installLimit = pLimit(4)
@@ -57,7 +61,9 @@ export default async function link (
     force: opts.force,
     registry: opts.registry,
   })
+  const oldShrinkwrap = R.clone(shrFiles.currentShrinkwrap)
   const pkg = await readPackage(path.join(opts.prefix, 'package.json'))
+  const linkedPkgs: {path: string, pkg: PackageJson}[] = []
 
   for (const linkFrom of linkFromPkgs) {
     const linkedPkg = await loadJsonFile(path.join(linkFrom, 'package.json'))
@@ -71,14 +77,31 @@ export default async function link (
     addLinkToShrinkwrap(shrFiles.currentShrinkwrap, addLinkOpts)
     addLinkToShrinkwrap(shrFiles.wantedShrinkwrap, addLinkOpts)
 
-    await linkToModules(linkedPkg.name, linkFrom, destModules)
-
-    const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
-    await linkPkgBins(linkFrom, linkToBin)
+    linkedPkgs.push({path: linkFrom, pkg: linkedPkg})
   }
 
   const updatedCurrentShrinkwrap = pruneShrinkwrap(shrFiles.currentShrinkwrap)
   const updatedWantedShrinkwrap = pruneShrinkwrap(shrFiles.wantedShrinkwrap)
+  const modulesInfo = await readModules(destModules)
+  await removeOrphanPkgs({
+    oldShrinkwrap,
+    newShrinkwrap: updatedCurrentShrinkwrap,
+    bin: opts.bin,
+    prefix: opts.prefix,
+    shamefullyFlatten: opts.shamefullyFlatten,
+    storeController: opts.storeController,
+    hoistedAliases: modulesInfo && modulesInfo.hoistedAliases || {},
+  })
+
+  // Linking should happen after removing orphans
+  // Otherwise would've been removed
+  for (const linkedPkg of linkedPkgs) {
+    await linkToModules(linkedPkg.pkg.name, linkedPkg.path, destModules)
+
+    const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
+    await linkPkgBins(linkedPkg.path, linkToBin)
+  }
+
   if (opts.shrinkwrap) {
     await saveShrinkwrap(opts.prefix, updatedWantedShrinkwrap, updatedCurrentShrinkwrap)
   } else {
@@ -88,11 +111,6 @@ export default async function link (
   if (reporter) {
     streamParser.removeListener('data', reporter)
   }
-
-  // TODO: call an internal implementation maybe, so that there would be no need to
-  // unattach and attach reporter again
-  // TODO: cover pruning after linking with tests
-  await pruneNodeModules(opts)
 }
 
 function addLinkToShrinkwrap (

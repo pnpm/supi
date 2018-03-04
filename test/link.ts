@@ -21,6 +21,7 @@ import {
   RootLog,
 } from 'supi'
 import exists = require('path-exists')
+import writeJsonFile = require('write-json-file')
 
 test('relative link', async (t: tape.Test) => {
   const project = prepare(t, {
@@ -120,4 +121,18 @@ test('failed linking should not create empty folder', async (t: tape.Test) => {
   } catch (err) {
     t.notOk(await exists(path.join(globalPrefix, 'node_modules', 'does-not-exist')))
   }
+})
+
+test('node_modules is pruned after linking', async (t: tape.Test) => {
+  const project = prepare(t)
+
+  await writeJsonFile('../is-positive/package.json', {name: 'is-positive', version: '1.0.0'})
+
+  await installPkgs(['is-positive@1.0.0'], await testDefaults())
+
+  t.ok(await exists('node_modules/.localhost+4873/is-positive/1.0.0/node_modules/is-positive/package.json'))
+
+  await link(['../is-positive'], path.resolve('node_modules'), await testDefaults())
+
+  t.notOk(await exists('node_modules/.localhost+4873/is-positive/1.0.0/node_modules/is-positive/package.json'), 'pruned')
 })
