@@ -44,8 +44,7 @@ test('unlink 1 package that exists in package.json', async (t: tape.Test) => {
     }),
   ])
 
-  await link('is-subdir', path.join('project', 'node_modules'), await testDefaults())
-  await link('is-positive', path.join('project', 'node_modules'), await testDefaults())
+  await link(['is-subdir', 'is-positive'], path.join('project', 'node_modules'), await testDefaults())
 
   process.chdir('project')
   await unlinkPkgs(['is-subdir'], await testDefaults())
@@ -67,7 +66,7 @@ test("don't update package when unlinking", async (t: tape.Test) => {
     version: '100.0.0',
   })
 
-  await link('foo', path.join('project', 'node_modules'), await testDefaults())
+  await link(['foo'], path.join('project', 'node_modules'), await testDefaults())
   await addDistTag('foo', '100.1.0', 'latest')
 
   process.chdir('project')
@@ -90,7 +89,7 @@ test("don't update package when unlinking. Initial link is done on a package w/o
     version: '100.0.0',
   })
 
-  await link('foo', path.join('project', 'node_modules'), await testDefaults())
+  await link(['foo'], path.join('project', 'node_modules'), await testDefaults())
   await addDistTag('foo', '100.1.0', 'latest')
 
   process.chdir('project')
@@ -122,8 +121,7 @@ test('unlink 2 packages. One of them exists in package.json', async (t: tape.Tes
     }),
   ])
 
-  await link('is-subdir', path.join('project', 'node_modules'), await testDefaults())
-  await link('is-positive', path.join('project', 'node_modules'), await testDefaults())
+  await link(['is-subdir', 'is-positive'], path.join('project', 'node_modules'), await testDefaults())
 
   process.chdir('project')
   await unlinkPkgs(['is-subdir', 'is-positive'], await testDefaults())
@@ -155,8 +153,7 @@ test('unlink all packages', async (t: tape.Test) => {
     }),
   ])
 
-  await link('is-subdir', path.join('project', 'node_modules'), await testDefaults())
-  await link('logger', path.join('project', 'node_modules'), await testDefaults())
+  await link(['is-subdir', 'logger'], path.join('project', 'node_modules'), await testDefaults())
 
   process.chdir('project')
   await unlink(await testDefaults())

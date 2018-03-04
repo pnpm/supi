@@ -29,7 +29,7 @@ test('relative link', async (t: tape.Test) => {
   const linkedPkgPath = path.resolve('..', linkedPkgName)
 
   await ncp(pathToLocalPkg(linkedPkgName), linkedPkgPath)
-  await link(`../${linkedPkgName}`, path.join(process.cwd(), 'node_modules'), await testDefaults())
+  await link([`../${linkedPkgName}`], path.join(process.cwd(), 'node_modules'), await testDefaults())
 
   await isExecutable(t, path.resolve('node_modules', '.bin', 'hello-world-js-bin'))
 
@@ -51,7 +51,7 @@ test('relative link is not rewritten by install', async (t: tape.Test) => {
   const linkedPkgPath = path.resolve('..', linkedPkgName)
 
   await ncp(pathToLocalPkg(linkedPkgName), linkedPkgPath)
-  await link(`../${linkedPkgName}`, path.join(process.cwd(), 'node_modules'), await testDefaults())
+  await link([`../${linkedPkgName}`], path.join(process.cwd(), 'node_modules'), await testDefaults())
 
   const reporter = sinon.spy()
 
@@ -99,7 +99,7 @@ test('global link', async function (t: tape.Test) {
 
   process.chdir(projectPath)
 
-  await linkFromGlobal(linkedPkgName, process.cwd(), await testDefaults({globalPrefix}))
+  await linkFromGlobal([linkedPkgName], process.cwd(), await testDefaults({globalPrefix}))
 
   isExecutable(t, path.resolve('node_modules', '.bin', 'hello-world-js-bin'))
 })
@@ -110,7 +110,7 @@ test('failed linking should not create empty folder', async (t: tape.Test) => {
   const globalPrefix = path.resolve('..', 'global')
 
   try {
-    await linkFromGlobal('does-not-exist', process.cwd(), await testDefaults({globalPrefix}))
+    await linkFromGlobal(['does-not-exist'], process.cwd(), await testDefaults({globalPrefix}))
     t.fail('should have failed')
   } catch (err) {
     t.notOk(await exists(path.join(globalPrefix, 'node_modules', 'does-not-exist')))

@@ -11,6 +11,7 @@ import extendOptions, {
 } from './extendInstallOptions'
 import readShrinkwrapFile from '../readShrinkwrapFiles'
 import {prune as pruneNodeModules} from './prune'
+import pLimit = require('p-limit')
 import {
   Shrinkwrap,
   prune as pruneShrinkwrap,
@@ -19,9 +20,10 @@ import {
 } from 'pnpm-shrinkwrap'
 
 const linkLogger = logger('link')
+const installLimit = pLimit(4)
 
 export default async function link (
-  linkFrom: string,
+  linkFromPkgs: string[],
   destModules: string,
   maybeOpts: InstallOptions & {
     skipInstall?: boolean,
@@ -35,12 +37,16 @@ export default async function link (
   const opts = await extendOptions(maybeOpts)
 
   if (!maybeOpts || !maybeOpts.skipInstall) {
-    await install({
-      ...opts,
-      prefix: linkFrom,
-      bin: path.join(linkFrom, 'node_modules', '.bin'),
-      global: false,
-    })
+    await Promise.all(
+      linkFromPkgs.map(prefix => installLimit(() =>
+        install({
+          ...opts,
+          prefix,
+          bin: path.join(prefix, 'node_modules', '.bin'),
+          global: false,
+        })
+      ))
+    )
   }
   const shrFiles = await readShrinkwrapFile({
     prefix: opts.prefix,
@@ -48,15 +54,20 @@ export default async function link (
     force: opts.force,
     registry: opts.registry,
   })
-  const linkedPkg = await loadJsonFile(path.join(linkFrom, 'package.json'))
-  const updatedCurrentShrinkwrap = addLinkToShrinkwrap(shrFiles.currentShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
-  const updatedWantedShrinkwrap = addLinkToShrinkwrap(shrFiles.wantedShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
 
-  await linkToModules(linkedPkg.name, linkFrom, destModules)
+  for (const linkFrom of linkFromPkgs) {
+    const linkedPkg = await loadJsonFile(path.join(linkFrom, 'package.json'))
+    addLinkToShrinkwrap(shrFiles.currentShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
+    addLinkToShrinkwrap(shrFiles.wantedShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
 
-  const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
-  await linkPkgBins(linkFrom, linkToBin)
+    await linkToModules(linkedPkg.name, linkFrom, destModules)
 
+    const linkToBin = maybeOpts && maybeOpts.linkToBin || path.join(destModules, '.bin')
+    await linkPkgBins(linkFrom, linkToBin)
+  }
+
+  const updatedCurrentShrinkwrap = pruneShrinkwrap(shrFiles.currentShrinkwrap)
+  const updatedWantedShrinkwrap = pruneShrinkwrap(shrFiles.wantedShrinkwrap)
   if (opts.shrinkwrap) {
     await saveShrinkwrap(opts.prefix, updatedWantedShrinkwrap, updatedCurrentShrinkwrap)
   } else {
@@ -89,7 +100,6 @@ function addLinkToShrinkwrap (shr: Shrinkwrap, prefix: string, linkFrom: string,
     shr.dependencies = shr.dependencies || {}
     shr.dependencies[linkedPkgName] = id
   }
-  return pruneShrinkwrap(shr)
 }
 
 async function linkToModules (pkgName: string, linkFrom: string, modules: string) {
@@ -99,7 +109,7 @@ async function linkToModules (pkgName: string, linkFrom: string, modules: string
 }
 
 export async function linkFromGlobal (
-  pkgName: string,
+  pkgNames: string[],
   linkTo: string,
   maybeOpts: InstallOptions & {globalPrefix: string}
 ) {
@@ -109,8 +119,8 @@ export async function linkFromGlobal (
   }
   const opts = await extendOptions(maybeOpts)
   const globalPkgPath = pathAbsolute(maybeOpts.globalPrefix)
-  const linkedPkgPath = path.join(globalPkgPath, 'node_modules', pkgName)
-  await link(linkedPkgPath, path.join(linkTo, 'node_modules'), opts)
+  const linkFromPkgs = pkgNames.map(pkgName => path.join(globalPkgPath, 'node_modules', pkgName))
+  await link(linkFromPkgs, path.join(linkTo, 'node_modules'), opts)
 
   if (reporter) {
     streamParser.removeListener('data', reporter)
@@ -130,7 +140,7 @@ export async function linkToGlobal (
   }
   const opts = await extendOptions(maybeOpts)
   const globalPkgPath = pathAbsolute(maybeOpts.globalPrefix)
-  await link(linkFrom, path.join(globalPkgPath, 'node_modules'), {
+  await link([linkFrom], path.join(globalPkgPath, 'node_modules'), {
     ...opts,
     linkToBin: maybeOpts.globalBin,
   })
