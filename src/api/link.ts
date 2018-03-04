@@ -10,9 +10,10 @@ import extendOptions, {
   InstallOptions,
 } from './extendInstallOptions'
 import readShrinkwrapFile from '../readShrinkwrapFiles'
+import {prune as pruneNodeModules} from './prune'
 import {
   Shrinkwrap,
-  prune,
+  prune as pruneShrinkwrap,
   write as saveShrinkwrap,
   writeCurrentOnly as saveCurrentShrinkwrapOnly,
 } from 'pnpm-shrinkwrap'
@@ -65,6 +66,11 @@ export default async function link (
   if (reporter) {
     streamParser.removeListener('data', reporter)
   }
+
+  // TODO: call an internal implementation maybe, so that there would be no need to
+  // unattach and attach reporter again
+  // TODO: cover pruning after linking with tests
+  await pruneNodeModules(opts)
 }
 
 function addLinkToShrinkwrap (shr: Shrinkwrap, prefix: string, linkFrom: string, linkedPkgName: string) {
@@ -83,7 +89,7 @@ function addLinkToShrinkwrap (shr: Shrinkwrap, prefix: string, linkFrom: string,
     shr.dependencies = shr.dependencies || {}
     shr.dependencies[linkedPkgName] = id
   }
-  return prune(shr)
+  return pruneShrinkwrap(shr)
 }
 
 async function linkToModules (pkgName: string, linkFrom: string, modules: string) {
