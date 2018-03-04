@@ -2,6 +2,7 @@ import path = require('path')
 import loadJsonFile = require('load-json-file')
 import symlinkDir = require('symlink-dir')
 import logger, {streamParser} from '@pnpm/logger'
+import {PackageJson} from '@pnpm/types'
 import {install} from './install'
 import pathAbsolute = require('path-absolute')
 import normalize = require('normalize-path')
@@ -18,6 +19,8 @@ import {
   write as saveShrinkwrap,
   writeCurrentOnly as saveCurrentShrinkwrapOnly,
 } from 'pnpm-shrinkwrap'
+import readPackage from '../fs/readPkg'
+import getSpecFromPackageJson from '../getSpecFromPackageJson'
 
 const linkLogger = logger('link')
 const installLimit = pLimit(4)
@@ -54,11 +57,19 @@ export default async function link (
     force: opts.force,
     registry: opts.registry,
   })
+  const pkg = await readPackage(path.join(opts.prefix, 'package.json'))
 
   for (const linkFrom of linkFromPkgs) {
     const linkedPkg = await loadJsonFile(path.join(linkFrom, 'package.json'))
-    addLinkToShrinkwrap(shrFiles.currentShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
-    addLinkToShrinkwrap(shrFiles.wantedShrinkwrap, opts.prefix, linkFrom, linkedPkg.name)
+
+    const packagePath = normalize(path.relative(opts.prefix, linkFrom))
+    const addLinkOpts = {
+      packagePath,
+      linkedPkgName: linkedPkg.name,
+      pkg,
+    }
+    addLinkToShrinkwrap(shrFiles.currentShrinkwrap, addLinkOpts)
+    addLinkToShrinkwrap(shrFiles.wantedShrinkwrap, addLinkOpts)
 
     await linkToModules(linkedPkg.name, linkFrom, destModules)
 
@@ -84,21 +95,33 @@ export default async function link (
   await pruneNodeModules(opts)
 }
 
-function addLinkToShrinkwrap (shr: Shrinkwrap, prefix: string, linkFrom: string, linkedPkgName: string) {
-  const packagePath = normalize(path.relative(prefix, linkFrom))
-  const legacyId = `file:${packagePath}`
-  const id = `link:${packagePath}`
-  if (shr.devDependencies && shr.devDependencies[linkedPkgName]) {
-    if (shr.devDependencies[linkedPkgName] !== legacyId) {
-      shr.devDependencies[linkedPkgName] = id
+function addLinkToShrinkwrap (
+  shr: Shrinkwrap,
+  opts: {
+    packagePath: string,
+    linkedPkgName: string,
+    pkg: PackageJson,
+  },
+) {
+  const legacyId = `file:${opts.packagePath}`
+  const id = `link:${opts.packagePath}`
+  if (shr.devDependencies && shr.devDependencies[opts.linkedPkgName]) {
+    if (shr.devDependencies[opts.linkedPkgName] !== legacyId) {
+      shr.devDependencies[opts.linkedPkgName] = id
     }
-  } else if (shr.optionalDependencies && shr.optionalDependencies[linkedPkgName]) {
-    if (shr.optionalDependencies[linkedPkgName] !== legacyId) {
-      shr.optionalDependencies[linkedPkgName] = id
+  } else if (shr.optionalDependencies && shr.optionalDependencies[opts.linkedPkgName]) {
+    if (shr.optionalDependencies[opts.linkedPkgName] !== legacyId) {
+      shr.optionalDependencies[opts.linkedPkgName] = id
     }
-  } else if (!shr.dependencies || shr.dependencies[linkedPkgName] !== legacyId) {
+  } else if (!shr.dependencies || shr.dependencies[opts.linkedPkgName] !== legacyId) {
     shr.dependencies = shr.dependencies || {}
-    shr.dependencies[linkedPkgName] = id
+    shr.dependencies[opts.linkedPkgName] = id
+  }
+  const availableSpec = getSpecFromPackageJson(opts.pkg, opts.linkedPkgName)
+  if (availableSpec) {
+    shr.specifiers[opts.linkedPkgName] = availableSpec
+  } else {
+    delete shr.specifiers[opts.linkedPkgName]
   }
 }
 

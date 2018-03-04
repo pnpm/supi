@@ -63,6 +63,7 @@ import {
   ROOT_NODE_ID,
 } from '../nodeIdUtils'
 import realNodeModulesDir from '../fs/realNodeModulesDir'
+import getSpecFromPackageJson from '../getSpecFromPackageJson'
 
 const ENGINE_NAME = `${process.platform}-${process.arch}-node-${process.version.split('.')[0]}`
 
@@ -381,25 +382,32 @@ async function installInContext (
     reinstallForFlatten: opts.reinstallForFlatten,
     shamefullyFlatten: opts.shamefullyFlatten,
   }
-  const nonLinkedPkgs = await pFilter(packagesToInstall,
-    async (wantedDependency: WantedDependency) => {
-        if (!wantedDependency.alias) return true
-        const isInnerLink = await safeIsInnerLink(nodeModulesPath, wantedDependency.alias, {
-          storePath: ctx.storePath,
-        })
-        if (isInnerLink === true) return true
-        rootLogger.debug({
-          linked: {
-            name: wantedDependency.alias,
-            from: isInnerLink as string,
-            to: nodeModulesPath,
-            dependencyType: wantedDependency.dev && 'dev' || wantedDependency.optional && 'optional' || 'prod',
-          },
-        })
-        // This info-log might be better to be moved to the reporter
-        logger.info(`${wantedDependency.alias} is linked to ${nodeModulesPath} from ${isInnerLink}`)
-        return false
+  const nonLinkedPkgs: WantedDependency[] = []
+  const linkedPkgs: (WantedDependency & {alias: string})[] = []
+  for (const wantedDependency of packagesToInstall) {
+    if (!wantedDependency.alias) {
+      nonLinkedPkgs.push(wantedDependency)
+      continue
+    }
+    const isInnerLink = await safeIsInnerLink(nodeModulesPath, wantedDependency.alias, {
+      storePath: ctx.storePath,
     })
+    if (isInnerLink === true) {
+      nonLinkedPkgs.push(wantedDependency)
+      continue
+    }
+    rootLogger.debug({
+      linked: {
+        name: wantedDependency.alias,
+        from: isInnerLink as string,
+        to: nodeModulesPath,
+        dependencyType: wantedDependency.dev && 'dev' || wantedDependency.optional && 'optional' || 'prod',
+      },
+    })
+    // This info-log might be better to be moved to the reporter
+    logger.info(`${wantedDependency.alias} is linked to ${nodeModulesPath} from ${isInnerLink}`)
+    linkedPkgs.push(wantedDependency as (WantedDependency & {alias: string}))
+  }
   stageLogger.debug('resolution_started')
   const rootPkgs = await resolveDependencies(
     installCtx,
@@ -474,11 +482,12 @@ async function installInContext (
     ctx.wantedShrinkwrap.optionalDependencies = ctx.wantedShrinkwrap.optionalDependencies || {}
     ctx.wantedShrinkwrap.devDependencies = ctx.wantedShrinkwrap.devDependencies || {}
 
-    const deps = newPkg.dependencies || {}
     const devDeps = newPkg.devDependencies || {}
     const optionalDeps = newPkg.optionalDependencies || {}
 
-    const getSpecFromPkg = (depName: string) => deps[depName] || devDeps[depName] || optionalDeps[depName]
+    linkedPkgs.forEach(linkedPkg => {
+      ctx.wantedShrinkwrap.specifiers[linkedPkg.alias] = getSpecFromPackageJson(newPkg as PackageJson, linkedPkg.alias) as string
+    })
 
     for (const dep of pkgsToSave) {
       const ref = absolutePathToRef(dep.id, {
@@ -505,7 +514,7 @@ async function installInContext (
       if (isDev || isOptional) {
         delete ctx.wantedShrinkwrap.dependencies[dep.alias]
       }
-      ctx.wantedShrinkwrap.specifiers[dep.alias] = getSpecFromPkg(dep.alias)
+      ctx.wantedShrinkwrap.specifiers[dep.alias] = getSpecFromPackageJson(newPkg, dep.alias) as string
     }
   }
 

@@ -23,7 +23,11 @@ import {
 import exists = require('path-exists')
 
 test('relative link', async (t: tape.Test) => {
-  const project = prepare(t)
+  const project = prepare(t, {
+    dependencies: {
+      'hello-world-js-bin': '*',
+    },
+  })
 
   const linkedPkgName = 'hello-world-js-bin'
   const linkedPkgPath = path.resolve('..', linkedPkgName)
@@ -39,6 +43,7 @@ test('relative link', async (t: tape.Test) => {
 
   const wantedShrinkwrap = await project.loadShrinkwrap()
   t.equal(wantedShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link added to wanted shrinkwrap')
+  t.equal(wantedShrinkwrap.specifiers['hello-world-js-bin'], '*', 'specifier of linked dependency added to shrinkwrap.yaml')
 
   const currentShrinkwrap = await project.loadCurrentShrinkwrap()
   t.equal(currentShrinkwrap.dependencies['hello-world-js-bin'], 'link:../hello-world-js-bin', 'link added to wanted shrinkwrap')
