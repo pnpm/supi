@@ -708,7 +708,7 @@ test('should install dependency in second project', async function (t) {
   t.equal(project2.requireModule('pkg-with-1-dep')().name, 'dep-of-pkg-with-1-dep', 'can require in 2nd pkg')
 })
 
-test('should throw error when trying to install using a different store then the previous one', async function(t) {
+test('should throw error when trying to install using a different store then the previous one', async function (t) {
   const project = prepare(t)
 
   await installPkgs(['rimraf@2.5.1'], await testDefaults({store: 'node_modules/.store1'}))
@@ -735,7 +735,7 @@ test('ignores drive case in store path', async (t: tape.Test) => {
   t.pass('Install did not fail')
 })
 
-test('should not throw error if using a different store after all the packages were uninstalled', async function(t) {
+test('should not throw error if using a different store after all the packages were uninstalled', async function (t) {
   // TODO: implement
 })
 
