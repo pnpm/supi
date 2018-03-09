@@ -1,0 +1,15 @@
+{
+  "extends": [
+    "config:base"
+  ],
+  "statusCheckVerify": true,
+  "ignoreDeps": [
+    "pnpm-default-reporter",
+    "pnpm-file-reporter",
+    "pnpm-install-checks",
+    "pnpm-logger",
+    "pnpm-registry-mock",
+    "remove-all-except-outer-links",
+    "pnpm-shrinkwrap"
+  ]
+}
