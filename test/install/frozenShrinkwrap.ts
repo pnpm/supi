@@ -49,6 +49,21 @@ test('frozen-shrinkwrap: should successfully install when shrinkwrap.yaml is ava
   project.has('is-positive')
 })
 
+test('frozen-shrinkwrap: should fail if no shrinkwrap.yaml is present', async (t) => {
+  prepare(t, {
+    dependencies: {
+      'is-positive': '^3.0.0',
+    },
+  })
+
+  try {
+    await install(await testDefaults({frozenShrinkwrap: true}))
+    t.fail()
+  } catch (err) {
+    t.equals(err.message, 'Headless installation requires a shrinkwrap.yaml file')
+  }
+})
+
 test('prefer-frozen-shrinkwrap: should prefer headless installation when shrinkwrap.yaml satisfies package.json', async (t) => {
   const project = prepare(t, {
     dependencies: {
