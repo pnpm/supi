@@ -1,7 +1,7 @@
 dependencies:
   '@pnpm/check-package': 1.0.0
   '@pnpm/fs-locker': 1.0.1
-  '@pnpm/headless': 0.1.7
+  '@pnpm/headless': 0.1.8
   '@pnpm/lifecycle': 1.0.1
   '@pnpm/link-bins': 1.0.1
   '@pnpm/modules-yaml': 1.0.0
@@ -52,7 +52,6 @@ dependencies:
   resolve-link-target: 1.0.1
   rimraf-then: 1.0.1
   semver: 5.5.0
-  supi: 'link:../__package_previews__/supi/supi'
   symlink-dir: 1.1.2
   util.promisify: 1.0.0
   validate-npm-package-name: 3.0.0
@@ -90,7 +89,7 @@ devDependencies:
   sepia: 2.0.2
   sinon: 5.0.0
   tape: 4.9.0
-  tape-promise: 2.0.1
+  tape-promise: 3.0.0
   ts-node: 5.0.1
   tslint: 5.9.1
   typescript: 2.8.1
@@ -387,7 +386,7 @@ packages:
       '@pnpm/logger': ^1.0.0
     resolution:
       integrity: sha512-shgFfcZ4Eu7UXR95xgt+x8lFA0tXFciLOuA8Me771dAx7Idgh3s257Aua9piSSR3KyVODL/NAULb+BIuAuQRXg==
-  /@pnpm/headless/0.1.6:
+  /@pnpm/headless/0.1.8:
     dependencies:
       '@pnpm/lifecycle': 1.0.1
       '@pnpm/link-bins': 1.0.1
@@ -404,7 +403,7 @@ packages:
       pnpm-shrinkwrap: 6.2.4
       ramda: 0.25.0
       read-package-json: 2.0.13
-      supi: 0.14.10
+      supi: 0.14.12
       symlink-dir: 1.1.2
       util.promisify: 1.0.0
     dev: false
@@ -413,34 +412,7 @@ packages:
     peerDependencies:
       '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-31z+Xpg344gEX/d03KWZCbZ8oCJUhrivGMI7KLhMUA0d3F4a6dw2PU6Utmg8Z7lI7OdcrxTJEjr9fdz/hNAdUQ==
-  /@pnpm/headless/0.1.7:
-    dependencies:
-      '@pnpm/lifecycle': 1.0.1
-      '@pnpm/link-bins': 1.0.1
-      '@pnpm/modules-yaml': 1.0.0
-      '@pnpm/package-requester': 0.8.5
-      '@pnpm/pkgid-to-filename': 1.0.0
-      '@pnpm/types': 1.7.0
-      '@types/ramda': 0.25.21
-      dependency-path: 1.2.1
-      graph-sequencer: 2.0.0
-      p-limit: 1.2.0
-      package-store: 0.18.0
-      path-exists: 3.0.0
-      pnpm-shrinkwrap: 6.2.4
-      ramda: 0.25.0
-      read-package-json: 2.0.13
-      supi: 0.14.10
-      symlink-dir: 1.1.2
-      util.promisify: 1.0.0
-    dev: false
-    engines:
-      node: '>=4'
-    peerDependencies:
-      '@pnpm/logger': ^1.0.0
-    resolution:
-      integrity: sha512-Uy0ZI7SE0fEvao4477EEqt2H86JHaZ+0UvhBo7rE4AxoX2qQgiFBVt/4X4maziL5ojVHUcWQ10KCtcVoKoRZdA==
+      integrity: sha512-UHXW4RcRD1R+HvNQ1nLc8AOz18eyr3abLMP9FdjUa39J2BwrjXyuvOiNB9gdcJGv7IPGByy+hcDsm/V1wm0Pxg==
   /@pnpm/lifecycle/1.0.1:
     dependencies:
       '@pnpm/types': 1.7.0
@@ -654,6 +626,7 @@ packages:
     resolution:
       integrity: sha512-pn7g4uxcofWTNG/cxmKvkMK2lxr4OUIhrQDrEVYEdVhW0WkWztsHkFrYjFgfNzPbYu3ITlB3T6aSVjCoJQTOlw==
   /@sindresorhus/is/0.7.0:
+    dev: true
     engines:
       node: '>=4'
     resolution:
@@ -2155,6 +2128,7 @@ packages:
   /formatio/1.2.0:
     dependencies:
       samsam: 1.3.0
+    deprecated: This package is unmaintained. Use @sinonjs/formatio instead
     dev: true
     resolution:
       integrity: sha1-87IWfZBoxGmKjVH092CjmlTYGOs=
@@ -2339,7 +2313,7 @@ packages:
       isurl: 1.0.0
       lowercase-keys: 1.0.1
       mimic-response: 1.0.0
-      p-cancelable: 0.4.0
+      p-cancelable: 0.4.1
       p-timeout: 2.0.1
       pify: 3.0.0
       safe-buffer: 5.1.1
@@ -3697,12 +3671,12 @@ packages:
       os-tmpdir: 1.0.2
     resolution:
       integrity: sha512-0CWcCECdMVc2Rw3U5w9ZjqX6ga6ubk1xDVKxtBQPK7wis/0F2r9T6k4ydGYhecl7YUBxBVxhL5oisPsNxAPe2g==
-  /p-cancelable/0.4.0:
+  /p-cancelable/0.4.1:
     dev: true
     engines:
       node: '>=4'
     resolution:
-      integrity: sha512-/AodqPe1y/GYbhSlnMjxukLGQfQIgsmjSy2CXCNB96kg4ozKvmlovuHEKICToOO/yS3LLWgrWI1dFtFfrePS1g==
+      integrity: sha512-HNa1A8LvB1kie7cERyy21VNeHb2CWJJYqyyC2o3klWFfMGlFmWv2Z7sFgZH8ZiaYL95ydToKTFVXgMV/Os0bBQ==
   /p-defer/1.0.0:
     dev: false
     engines:
@@ -3760,21 +3734,6 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-MJGD2eVNHhtCsGLBDsfNzhBDlWxBFb5BvVXhJFbmlXH76Llo792ylwqEYJguLo+BnxZpos/Qw9dq0voyQRD3pg==
-  /p-reduce/1.0.0:
-    dev: false
-    engines:
-      node: '>=4'
-    resolution:
-      integrity: sha1-GMKw3ZNqRpClKfgjH1ig/bakffo=
-  /p-series/1.1.0:
-    dependencies:
-      '@sindresorhus/is': 0.7.0
-      p-reduce: 1.0.0
-    dev: false
-    engines:
-      node: '>=4'
-    resolution:
-      integrity: sha512-356covArc9UCfj2twY/sxCJKGMzzO+pJJtucizsPC6aS1xKSTBc9PQrQhvFR3+7F+fa2KBKdJjdIcv6NEWDcIQ==
   /p-timeout/2.0.1:
     dependencies:
       p-finally: 1.0.0
@@ -4849,11 +4808,11 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha1-XvjbKV0B5u1sv3qrlpmNeCJSe2g=
-  /supi/0.14.10:
+  /supi/0.14.12:
     dependencies:
       '@pnpm/check-package': 1.0.0
       '@pnpm/fs-locker': 1.0.1
-      '@pnpm/headless': 0.1.6
+      '@pnpm/headless': 0.1.8
       '@pnpm/lifecycle': 1.0.1
       '@pnpm/link-bins': 1.0.1
       '@pnpm/modules-yaml': 1.0.0
@@ -4880,6 +4839,7 @@ packages:
       execa: 0.10.0
       get-npm-tarball-url: 2.0.1
       graceful-fs: 4.1.11
+      graph-sequencer: 2.0.0
       is-ci: 1.1.0
       is-inner-link: 2.0.2
       is-subdir: 1.0.2
@@ -4891,7 +4851,6 @@ packages:
       os-homedir: 1.0.2
       p-filter: 1.0.0
       p-limit: 1.2.0
-      p-series: 1.1.0
       package-store: 0.18.0
       path-absolute: 1.0.0
       path-exists: 3.0.0
@@ -4915,7 +4874,7 @@ packages:
     peerDependencies:
       '@pnpm/logger': ^1.0.0
     resolution:
-      integrity: sha512-7j9aQ6CyRgzBzDXL3DAW3uXgd/tKRJjBl299CZThKTmTo7tvsIREQun0CceS1Gg2FxfOVHYw6HcAzFrpIBQeSQ==
+      integrity: sha512-hoxd3tDtENb4M6vGn856t/8quH5uENYYKNsP/LZ3Vy+B/0mDscBbiKBOH1q8EVFN1DOS3iVJ/8p7q7lrNMzaBw==
   /supports-color/2.0.0:
     dev: true
     engines:
@@ -4950,13 +4909,13 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-GXEvwF1zpalvovqO+x18H7k+4adCXn9NU6vjfEQ+cVS7Ltq7YXFQyitdl7WoQqNUMce3RGMPo037GJrtM7f7lw==
-  /tape-promise/2.0.1:
+  /tape-promise/3.0.0:
     dependencies:
       is-promise: 2.1.0
       onetime: 2.0.1
     dev: true
     resolution:
-      integrity: sha1-dryf91CLPgV9CW9ErJqTw8rk7TQ=
+      integrity: sha512-3LZy5ieZleqn9PbZgr2Aqkw5ikxdJT5DhnNxWH8tCL6yzNQyv0jPZH8nkpboTPDRO5COYmYbjKhn9Fl2GchOKg==
   /tape/4.9.0:
     dependencies:
       deep-equal: 1.0.1
@@ -5568,7 +5527,7 @@ specifiers:
   sinon: ^5.0.0
   symlink-dir: ^1.1.0
   tape: ^4.8.0
-  tape-promise: ^2.0.1
+  tape-promise: ^3.0.0
   ts-node: ^5.0.1
   tslint: ^5.4.2
   typescript: ^2.7.1
