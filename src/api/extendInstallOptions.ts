@@ -30,6 +30,7 @@ export interface InstallOptions {
   },
   hooks?: {
     readPackage?: ReadPackageHook,
+    postResolution?: () => void,
   },
   saveExact?: boolean,
   savePrefix?: string,
