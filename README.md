@@ -1,3 +1,5 @@
+> This package has been moved to the [pnpm](https://github.com/pnpm/pnpm) multi-package repository.
+
 <p align="center">
   <img alt="supi - pnpm's installation engine" src="https://cdn.rawgit.com/pnpm/supi/master/logo.svg" width="200">
 </p>
